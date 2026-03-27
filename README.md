@@ -1,91 +1,70 @@
-# TeamUp App
+# TeamUp
 
-TeamUp is a mobile MVP for creating and joining local cycling activities.
+TeamUp is a mobile MVP for discovering, creating, and joining local cycling activities.
 
-The app lets users:
-- sign in with Google
-- complete onboarding
-- discover upcoming rides
-- create activities
-- join activities
-- view group details
-- chat inside an activity group
-- visualize participants through a puzzle-style group board
+The product is designed around a social group formation flow:
+users discover rides, join activities, enter a shared group space, and interact through a lightweight group chat and a visual puzzle-style participant board.
 
-## Current MVP Scope
+## Product Vision
+
+TeamUp is not just an activity listing app.
+
+Its long-term goal is to make joining local activities feel more social, more visual, and more rewarding by combining:
+
+- local activity discovery
+- lightweight group formation
+- participant visibility
+- shared group interaction
+- progressive “group completion” through a puzzle mechanic
+
+The first MVP focuses on cycling communities.
+
+---
+
+## Current MVP Features
 
 ### Authentication
 - Google Sign-In with Supabase Auth
-- persistent session restore
-- protected app areas
+- session persistence across app relaunch
+- protected authenticated routes
 
-### Profile
-- automatic profile creation after login
-- onboarding completion flow
-- profile storage in Supabase
-- profile screen
+### User Profile
+- automatic profile creation after first login
+- onboarding flow
+- onboarding completion persistence
+- profile screen connected to backend data
 
-### Activities
-- discover upcoming activities
-- create a new cycling activity
+### Activity Discovery
+- discover upcoming rides
+- create a new activity
 - activity details screen
-- participant join flow
-- host auto-joins on activity creation
+- host automatically joins created activity
 
-### Group
+### Participation
+- join activity flow
 - participant list
-- puzzle board preview
-- group screen
-- simple group chat
+- participant count
+- full/occupied group visualization
+
+### Group Experience
+- reusable PuzzleBoard component
+- group screen per activity
+- participant overview
+- simple group chat V1
 
 ---
 
-## Tech Stack
-
-- **Expo**
-- **React Native**
-- **Expo Router**
-- **TypeScript**
-- **Supabase**
-  - Auth
-  - Postgres
-  - Row Level Security
-
----
-
-## Project Structure
+## Main User Flow
 
 ```text
-app/
-  (tabs)/
-    home.tsx
-    create.tsx
-    profile.tsx
-    _layout.tsx
-  activity/
-    [id].tsx
-  group/
-    [id].tsx
-  auth/
-    callback.tsx
-  index.tsx
-  onboarding.tsx
-
-components/
-  auth/
-  puzzle/
-
-hooks/
-  useAuth.ts
-  useProfile.ts
-  useActivities.ts
-  useActivity.ts
-  useActivityParticipants.ts
-  useParticipantProfiles.ts
-  useMessages.ts
-
-src/
-  auth/
-  lib/
-  services/
-  types/
+Welcome
+→ Google Login
+→ Session Restore
+→ Profile Auto-Creation
+→ Onboarding
+→ Discover Feed
+→ Create Activity
+→ Activity Details
+→ Join Activity
+→ Group Screen
+→ Chat
