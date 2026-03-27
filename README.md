@@ -1,50 +1,91 @@
-# Welcome to your Expo app 👋
+# TeamUp App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+TeamUp is a mobile MVP for creating and joining local cycling activities.
 
-## Get started
+The app lets users:
+- sign in with Google
+- complete onboarding
+- discover upcoming rides
+- create activities
+- join activities
+- view group details
+- chat inside an activity group
+- visualize participants through a puzzle-style group board
 
-1. Install dependencies
+## Current MVP Scope
 
-   ```bash
-   npm install
-   ```
+### Authentication
+- Google Sign-In with Supabase Auth
+- persistent session restore
+- protected app areas
 
-2. Start the app
+### Profile
+- automatic profile creation after login
+- onboarding completion flow
+- profile storage in Supabase
+- profile screen
 
-   ```bash
-   npx expo start
-   ```
+### Activities
+- discover upcoming activities
+- create a new cycling activity
+- activity details screen
+- participant join flow
+- host auto-joins on activity creation
 
-In the output, you'll find options to open the app in a
+### Group
+- participant list
+- puzzle board preview
+- group screen
+- simple group chat
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+---
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Tech Stack
 
-## Get a fresh project
+- **Expo**
+- **React Native**
+- **Expo Router**
+- **TypeScript**
+- **Supabase**
+  - Auth
+  - Postgres
+  - Row Level Security
 
-When you're ready, run:
+---
 
-```bash
-npm run reset-project
-```
+## Project Structure
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+```text
+app/
+  (tabs)/
+    home.tsx
+    create.tsx
+    profile.tsx
+    _layout.tsx
+  activity/
+    [id].tsx
+  group/
+    [id].tsx
+  auth/
+    callback.tsx
+  index.tsx
+  onboarding.tsx
 
-## Learn more
+components/
+  auth/
+  puzzle/
 
-To learn more about developing your project with Expo, look at the following resources:
+hooks/
+  useAuth.ts
+  useProfile.ts
+  useActivities.ts
+  useActivity.ts
+  useActivityParticipants.ts
+  useParticipantProfiles.ts
+  useMessages.ts
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+src/
+  auth/
+  lib/
+  services/
+  types/
