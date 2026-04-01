@@ -1,27 +1,69 @@
-import { useRouter } from 'expo-router'
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
 import { useProfile } from '../../hooks/useProfile'
-import { supabase } from '../../src/lib/supabase'
 
 export default function ProfileScreen() {
-  const router = useRouter()
   const { session } = useAuth()
   const userId = session?.user?.id ?? null
-  const { profile, loading } = useProfile(userId)
+  const email = session?.user?.email ?? null
 
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut()
+  const { profile, loading, error, updateProfile } = useProfile(userId, email)
 
-    if (error) {
-      console.error('Logout error:', error.message)
-      return
+  const [firstName, setFirstName] = useState('')
+  const [city, setCity] = useState('')
+  const [bio, setBio] = useState('')
+  const [cyclingLevel, setCyclingLevel] = useState<'beginner' | 'intermediate' | 'advanced'>(
+    'beginner'
+  )
+  const [ridingStyle, setRidingStyle] = useState<'road' | 'mtb' | 'gravel' | 'casual'>('road')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!profile) return
+
+    setFirstName(profile.first_name ?? '')
+    setCity(profile.city ?? '')
+    setBio(profile.bio ?? '')
+    setCyclingLevel(
+      (profile.cycling_level as 'beginner' | 'intermediate' | 'advanced') ?? 'beginner'
+    )
+    setRidingStyle(
+      (profile.riding_style as 'road' | 'mtb' | 'gravel' | 'casual') ?? 'road'
+    )
+  }, [profile])
+
+  const handleSave = async () => {
+    try {
+      setSaving(true)
+
+      await updateProfile({
+        first_name: firstName.trim() || null,
+        city: city.trim() || null,
+        bio: bio.trim() || null,
+        cycling_level: cyclingLevel,
+        riding_style: ridingStyle,
+        onboarding_completed: true,
+      })
+
+      Alert.alert('Saved', 'Your profile has been updated')
+    } catch (err: any) {
+      Alert.alert('Save failed', err?.message ?? 'Unknown error')
+    } finally {
+      setSaving(false)
     }
-
-    router.replace('/')
   }
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator />
@@ -31,47 +73,95 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>My Profile</Text>
-      <Text style={styles.subtitle}>Your TeamUp identity</Text>
+      <Text style={styles.title}>Profile</Text>
+      <Text style={styles.subtitle}>Manage your public rider identity</Text>
 
-      <View style={styles.avatarWrap}>
-        {profile?.avatar_url ? (
-          <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarFallback]}>
-            <Text style={styles.avatarFallbackText}>
-              {profile?.first_name?.[0]?.toUpperCase() ?? '?'}
-            </Text>
-          </View>
-        )}
-      </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <View style={styles.card}>
-        <Text style={styles.label}>First name</Text>
-        <Text style={styles.value}>{profile?.first_name ?? '—'}</Text>
-
         <Text style={styles.label}>Email</Text>
-        <Text style={styles.value}>{profile?.email ?? '—'}</Text>
+        <Text style={styles.readonlyValue}>{profile?.email ?? email ?? '—'}</Text>
+
+        <Text style={styles.label}>First name</Text>
+        <TextInput
+          value={firstName}
+          onChangeText={setFirstName}
+          placeholder="Enter your first name"
+          style={styles.input}
+        />
 
         <Text style={styles.label}>City</Text>
-        <Text style={styles.value}>{profile?.city ?? '—'}</Text>
-
-        <Text style={styles.label}>Cycling level</Text>
-        <Text style={styles.value}>{profile?.cycling_level ?? '—'}</Text>
-
-        <Text style={styles.label}>Riding style</Text>
-        <Text style={styles.value}>{profile?.riding_style ?? '—'}</Text>
+        <TextInput
+          value={city}
+          onChangeText={setCity}
+          placeholder="Enter your city"
+          style={styles.input}
+        />
 
         <Text style={styles.label}>Bio</Text>
-        <Text style={styles.value}>{profile?.bio ?? '—'}</Text>
+        <TextInput
+          value={bio}
+          onChangeText={setBio}
+          placeholder="Tell others a bit about you"
+          style={[styles.input, styles.textArea]}
+          multiline
+        />
+
+        <Text style={styles.label}>Cycling level</Text>
+        <View style={styles.optionRow}>
+          {(['beginner', 'intermediate', 'advanced'] as const).map((level) => (
+            <Pressable
+              key={level}
+              onPress={() => setCyclingLevel(level)}
+              style={[
+                styles.optionButton,
+                cyclingLevel === level && styles.optionButtonSelected,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.optionButtonText,
+                  cyclingLevel === level && styles.optionButtonTextSelected,
+                ]}
+              >
+                {level}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Riding style</Text>
+        <View style={styles.optionRow}>
+          {(['road', 'mtb', 'gravel', 'casual'] as const).map((style) => (
+            <Pressable
+              key={style}
+              onPress={() => setRidingStyle(style)}
+              style={[
+                styles.optionButton,
+                ridingStyle === style && styles.optionButtonSelected,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.optionButtonText,
+                  ridingStyle === style && styles.optionButtonTextSelected,
+                ]}
+              >
+                {style}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
-      <Pressable style={styles.secondaryButton}>
-        <Text style={styles.secondaryButtonText}>Edit profile later</Text>
-      </Pressable>
-
-      <Pressable style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
+      <Pressable
+        onPress={handleSave}
+        disabled={saving}
+        style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+      >
+        <Text style={styles.saveButtonText}>
+          {saving ? 'Saving...' : 'Save profile'}
+        </Text>
       </Pressable>
     </ScrollView>
   )
@@ -86,7 +176,7 @@ const styles = StyleSheet.create({
   container: {
     padding: 24,
     paddingBottom: 40,
-    gap: 18,
+    gap: 16,
     backgroundColor: '#fff',
   },
   title: {
@@ -98,32 +188,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  avatarWrap: {
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  avatar: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-  },
-  avatarFallback: {
-    backgroundColor: '#0B1220',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarFallbackText: {
-    color: '#fff',
-    fontSize: 36,
-    fontWeight: '700',
-  },
   card: {
     borderWidth: 1,
     borderColor: '#e5e5e5',
     borderRadius: 16,
     padding: 18,
-    gap: 8,
+    gap: 10,
     backgroundColor: '#fafafa',
   },
   label: {
@@ -132,32 +202,65 @@ const styles = StyleSheet.create({
     color: '#555',
     marginTop: 6,
   },
-  value: {
+  readonlyValue: {
     fontSize: 16,
     color: '#111',
   },
-  secondaryButton: {
+  input: {
     borderWidth: 1,
-    borderColor: '#d7d7d7',
-    paddingVertical: 15,
-    borderRadius: 14,
-    alignItems: 'center',
+    borderColor: '#d0d0d0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
     backgroundColor: '#fff',
   },
-  secondaryButtonText: {
-    color: '#222',
-    fontSize: 16,
-    fontWeight: '600',
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
-  logoutButton: {
+  optionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  optionButton: {
+    borderWidth: 1,
+    borderColor: '#d0d0d0',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+  },
+  optionButtonSelected: {
     backgroundColor: '#0B1220',
+    borderColor: '#0B1220',
+  },
+  optionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111',
+    textTransform: 'capitalize',
+  },
+  optionButtonTextSelected: {
+    color: '#fff',
+  },
+  saveButton: {
+    backgroundColor: '#22c55e',
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
   },
-  logoutButtonText: {
-    color: '#fff',
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveButtonText: {
     fontSize: 16,
     fontWeight: '700',
+    color: '#0B1220',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 16,
   },
 })

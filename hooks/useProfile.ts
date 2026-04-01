@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { profileService } from '../src/services/profileService'
-import type { Profile, UpdateProfileInput } from '../src/types/profile'
+import { profileService, type UpdateProfileInput } from '../src/services/profileService'
+import type { Profile } from '../src/types/profile'
 
 type UseProfileResult = {
   profile: Profile | null
   loading: boolean
   error: string | null
-  refreshProfile: () => Promise<void>
   ensureProfile: () => Promise<void>
-  updateProfile: (updates: UpdateProfileInput) => Promise<void>
+  refreshProfile: () => Promise<void>
+  updateProfile: (input: UpdateProfileInput) => Promise<void>
 }
 
-export function useProfile(userId?: string | null): UseProfileResult {
+export function useProfile(userId?: string | null, email?: string | null): UseProfileResult {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,7 +26,7 @@ export function useProfile(userId?: string | null): UseProfileResult {
       setLoading(true)
       setError(null)
 
-      const data = await profileService.getMyProfile(userId)
+      const data = await profileService.getProfile(userId)
       setProfile(data)
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load profile')
@@ -36,36 +36,33 @@ export function useProfile(userId?: string | null): UseProfileResult {
   }, [userId])
 
   const ensureProfile = useCallback(async () => {
-    if (!userId) {
-      setProfile(null)
-      return
-    }
+    if (!userId) return
 
     try {
       setLoading(true)
       setError(null)
 
-      const data = await profileService.ensureProfileFromSessionUser()
+      const data = await profileService.ensureProfile(userId, email)
       setProfile(data)
     } catch (err: any) {
       setError(err?.message ?? 'Failed to ensure profile')
     } finally {
       setLoading(false)
     }
-  }, [userId])
+  }, [userId, email])
 
   const updateProfile = useCallback(
-    async (updates: UpdateProfileInput) => {
+    async (input: UpdateProfileInput) => {
       if (!userId) {
-        throw new Error('No userId provided')
+        throw new Error('Missing userId')
       }
 
       try {
         setLoading(true)
         setError(null)
 
-        const updated = await profileService.updateMyProfile(userId, updates)
-        setProfile(updated)
+        const data = await profileService.updateProfile(userId, input)
+        setProfile(data)
       } catch (err: any) {
         setError(err?.message ?? 'Failed to update profile')
         throw err
@@ -77,21 +74,15 @@ export function useProfile(userId?: string | null): UseProfileResult {
   )
 
   useEffect(() => {
-    if (!userId) {
-      setProfile(null)
-      setLoading(false)
-      return
-    }
-
     refreshProfile()
-  }, [userId, refreshProfile])
+  }, [refreshProfile])
 
   return {
     profile,
     loading,
     error,
-    refreshProfile,
     ensureProfile,
+    refreshProfile,
     updateProfile,
   }
 }

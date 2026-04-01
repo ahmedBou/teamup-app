@@ -1,8 +1,17 @@
 import { supabase } from '../lib/supabase'
-import type { Profile, UpdateProfileInput, UpsertProfileInput } from '../types/profile'
+import type { Profile } from '../types/profile'
+
+export type UpdateProfileInput = {
+  first_name?: string | null
+  city?: string | null
+  bio?: string | null
+  cycling_level?: 'beginner' | 'intermediate' | 'advanced' | null
+  riding_style?: 'road' | 'mtb' | 'gravel' | 'casual' | null
+  onboarding_completed?: boolean
+}
 
 export const profileService = {
-  async getMyProfile(userId: string): Promise<Profile | null> {
+  async getProfile(userId: string): Promise<Profile | null> {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -16,8 +25,8 @@ export const profileService = {
     return data as Profile | null
   },
 
-  async createProfileIfMissing(input: UpsertProfileInput): Promise<Profile> {
-    const existing = await this.getMyProfile(input.id)
+  async ensureProfile(userId: string, email?: string | null): Promise<Profile> {
+    const existing = await this.getProfile(userId)
 
     if (existing) {
       return existing
@@ -26,15 +35,8 @@ export const profileService = {
     const { data, error } = await supabase
       .from('profiles')
       .insert({
-        id: input.id,
-        email: input.email ?? null,
-        first_name: input.first_name ?? null,
-        avatar_url: input.avatar_url ?? null,
-        city: input.city ?? null,
-        bio: input.bio ?? null,
-        cycling_level: input.cycling_level ?? null,
-        riding_style: input.riding_style ?? null,
-        onboarding_completed: input.onboarding_completed ?? false,
+        id: userId,
+        email: email ?? null,
       })
       .select()
       .single()
@@ -46,10 +48,17 @@ export const profileService = {
     return data as Profile
   },
 
-  async updateMyProfile(userId: string, updates: UpdateProfileInput): Promise<Profile> {
+  async updateProfile(userId: string, input: UpdateProfileInput): Promise<Profile> {
     const { data, error } = await supabase
       .from('profiles')
-      .update(updates)
+      .update({
+        first_name: input.first_name ?? null,
+        city: input.city ?? null,
+        bio: input.bio ?? null,
+        cycling_level: input.cycling_level ?? null,
+        riding_style: input.riding_style ?? null,
+        onboarding_completed: input.onboarding_completed,
+      })
       .eq('id', userId)
       .select()
       .single()
@@ -59,51 +68,5 @@ export const profileService = {
     }
 
     return data as Profile
-  },
-
-  async ensureProfileFromSessionUser(): Promise<Profile> {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError) {
-      throw userError
-    }
-
-    if (!user) {
-      throw new Error('No authenticated user found')
-    }
-
-    const metadata = user.user_metadata ?? {}
-
-    const firstName =
-      metadata.given_name ??
-      metadata.first_name ??
-      metadata.name?.split?.(' ')?.[0] ??
-      null
-
-    const avatarUrl =
-      metadata.avatar_url ??
-      metadata.picture ??
-      null
-
-    return await this.createProfileIfMissing({
-      id: user.id,
-      email: user.email ?? null,
-      first_name: firstName,
-      avatar_url: avatarUrl,
-      onboarding_completed: false,
-    })
-  },
-
-  async completeOnboarding(
-    userId: string,
-    updates: Omit<UpdateProfileInput, 'onboarding_completed'>
-  ): Promise<Profile> {
-    return await this.updateMyProfile(userId, {
-      ...updates,
-      onboarding_completed: true,
-    })
   },
 }

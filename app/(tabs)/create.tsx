@@ -1,13 +1,13 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
 import { activityService } from '../../src/services/activityService'
@@ -20,6 +20,18 @@ const activityTypes: ActivityType[] = [
   'casual_ride',
 ]
 
+function isValidDate(date: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date)
+}
+
+function isValidTime(time: string) {
+  return /^\d{2}:\d{2}$/.test(time)
+}
+
+function buildIsoDateTime(date: string, time: string) {
+  return new Date(`${date}T${time}:00`).toISOString()
+}
+
 export default function CreateActivityScreen() {
   const router = useRouter()
   const { session } = useAuth()
@@ -28,7 +40,8 @@ export default function CreateActivityScreen() {
   const [description, setDescription] = useState('')
   const [activityType, setActivityType] = useState<ActivityType>('road_ride')
   const [city, setCity] = useState('')
-  const [startTime, setStartTime] = useState('')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
   const [maxParticipants, setMaxParticipants] = useState('6')
   const [saving, setSaving] = useState(false)
 
@@ -50,11 +63,23 @@ export default function CreateActivityScreen() {
       return
     }
 
-    if (!startTime.trim()) {
-      Alert.alert(
-        'Missing info',
-        'Please enter a start time in this format: 2026-03-30T09:00:00'
-      )
+    if (!date.trim()) {
+      Alert.alert('Missing info', 'Please enter a date')
+      return
+    }
+
+    if (!time.trim()) {
+      Alert.alert('Missing info', 'Please enter a time')
+      return
+    }
+
+    if (!isValidDate(date.trim())) {
+      Alert.alert('Invalid date', 'Use this format: 2026-04-05')
+      return
+    }
+
+    if (!isValidTime(time.trim())) {
+      Alert.alert('Invalid time', 'Use this format: 09:30')
       return
     }
 
@@ -68,13 +93,15 @@ export default function CreateActivityScreen() {
     try {
       setSaving(true)
 
+      const startTimeIso = buildIsoDateTime(date.trim(), time.trim())
+
       await activityService.createActivity({
         host_id: hostId,
         title: title.trim(),
         description: description.trim() || null,
         activity_type: activityType,
         city: city.trim(),
-        start_time: new Date(startTime).toISOString(),
+        start_time: startTimeIso,
         max_participants: parsedMax,
       })
 
@@ -145,17 +172,28 @@ export default function CreateActivityScreen() {
         />
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Start time</Text>
-        <TextInput
-          value={startTime}
-          onChangeText={setStartTime}
-          placeholder="2026-03-30T09:00:00"
-          style={styles.input}
-        />
-        <Text style={styles.helperText}>
-          Use ISO format for now, for example: 2026-03-30T09:00:00
-        </Text>
+      <View style={styles.row}>
+        <View style={[styles.section, styles.halfWidth]}>
+          <Text style={styles.label}>Date</Text>
+          <TextInput
+            value={date}
+            onChangeText={setDate}
+            placeholder="2026-04-05"
+            style={styles.input}
+          />
+          <Text style={styles.helperText}>Format: YYYY-MM-DD</Text>
+        </View>
+
+        <View style={[styles.section, styles.halfWidth]}>
+          <Text style={styles.label}>Time</Text>
+          <TextInput
+            value={time}
+            onChangeText={setTime}
+            placeholder="09:30"
+            style={styles.input}
+          />
+          <Text style={styles.helperText}>Format: HH:MM</Text>
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -200,6 +238,13 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: 10,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfWidth: {
+    flex: 1,
   },
   label: {
     fontSize: 15,

@@ -67,4 +67,30 @@ export const activityService = {
 
     return data as Activity | null
   },
+
+  async updateActivityStatus(
+    activityId: string,
+    status: 'open' | 'full' | 'cancelled'
+    ): Promise<void> {
+      const { error } = await supabase
+        .from('activities')
+        .update({ status })
+        .eq('id', activityId)
+
+      if (error) {
+        throw error
+      }
+  },
+  
+  async cancelActivity(activityId: string): Promise<void> {
+    const { error } = await supabase
+      .from('activities')
+      .update({ status: 'cancelled' })
+      .eq('id', activityId)
+
+    if (error) {
+      throw error
+    }
+  }
+
 }

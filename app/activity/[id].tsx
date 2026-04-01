@@ -14,6 +14,7 @@ import { useActivity } from '../../hooks/useActivity'
 import { useActivityParticipants } from '../../hooks/useActivityParticipants'
 import { useAuth } from '../../hooks/useAuth'
 import { useParticipantProfiles } from '../../hooks/useParticipantProfiles'
+import { activityService } from '../../src/services/activityService'
 
 function formatDate(dateString: string) {
   const date = new Date(dateString)
@@ -72,10 +73,16 @@ export default function ActivityDetailsScreen() {
 
   const isFull = participantCount >= activity.max_participants
   const isHost = !!userId && activity.host_id === userId
+  const isCancelled = activity.status === 'cancelled'
 
   const handleJoin = async () => {
     if (!userId) {
       Alert.alert('Error', 'You must be logged in')
+      return
+    }
+
+    if (isCancelled) {
+      Alert.alert('Cancelled', 'This activity has been cancelled')
       return
     }
 
@@ -92,6 +99,13 @@ export default function ActivityDetailsScreen() {
     try {
       await join()
       await refreshParticipantProfiles()
+
+      const newCount = participantCount + 1
+
+      if (newCount >= activity.max_participants) {
+        await activityService.updateActivityStatus(activity.id, 'full')
+      }
+
       Alert.alert('Joined', 'You joined the activity successfully')
     } catch (err: any) {
       Alert.alert('Join failed', err?.message ?? 'Unknown error')
@@ -120,16 +134,61 @@ export default function ActivityDetailsScreen() {
     try {
       await leave()
       await refreshParticipantProfiles()
+
+      const newCount = participantCount - 1
+
+      if (newCount < activity.max_participants) {
+        await activityService.updateActivityStatus(activity.id, 'open')
+      }
+
       Alert.alert('Left activity', 'You left the activity successfully')
     } catch (err: any) {
       Alert.alert('Leave failed', err?.message ?? 'Unknown error')
     }
   }
 
+  const handleCancelActivity = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'You must be logged in')
+      return
+    }
+
+    if (!isHost) {
+      Alert.alert('Forbidden', 'Only the host can cancel this activity')
+      return
+    }
+
+    Alert.alert(
+      'Cancel activity',
+      'Are you sure you want to cancel this activity?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await activityService.cancelActivity(activity.id)
+              Alert.alert('Cancelled', 'The activity has been cancelled')
+            } catch (err: any) {
+              Alert.alert('Cancel failed', err?.message ?? 'Unknown error')
+            }
+          },
+        },
+      ]
+    )
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>{activity.title}</Text>
       <Text style={styles.subtitle}>Activity details</Text>
+
+      {isHost ? (
+        <View style={styles.hostBadge}>
+          <Text style={styles.hostBadgeText}>You are the host</Text>
+        </View>
+      ) : null}
 
       <PuzzleBoard
         participants={participantProfiles.map((item) => ({
@@ -156,7 +215,7 @@ export default function ActivityDetailsScreen() {
         </Text>
 
         <Text style={styles.label}>Status</Text>
-        <Text style={styles.value}>{isFull ? 'full' : activity.status}</Text>
+        <Text style={styles.value}>{isCancelled ? 'cancelled' : isFull ? 'full' : activity.status}</Text>
 
         <Text style={styles.label}>Description</Text>
         <Text style={styles.value}>{activity.description ?? '—'}</Text>
@@ -204,14 +263,20 @@ export default function ActivityDetailsScreen() {
 
       <Pressable
         onPress={handleJoin}
-        disabled={isJoined || isFull}
+        disabled={isJoined || isFull || isCancelled}
         style={[
           styles.joinButton,
-          (isJoined || isFull) && styles.joinButtonDisabled,
+          (isJoined || isFull || isCancelled) && styles.joinButtonDisabled,
         ]}
       >
         <Text style={styles.joinButtonText}>
-          {isJoined ? 'Already joined' : isFull ? 'Activity full' : 'Join activity'}
+          {isCancelled
+            ? 'Activity cancelled'
+            : isJoined
+            ? 'Already joined'
+            : isFull
+            ? 'Activity full'
+            : 'Join activity'}
         </Text>
       </Pressable>
 
@@ -235,6 +300,12 @@ export default function ActivityDetailsScreen() {
           <Text style={styles.leaveButtonText}>
             {isHost ? 'Host cannot leave' : 'Leave activity'}
           </Text>
+        </Pressable>
+      ) : null}
+
+      {isHost ? (
+        <Pressable onPress={handleCancelActivity} style={styles.cancelButton}>
+          <Text style={styles.cancelButtonText}>Cancel activity</Text>
         </Pressable>
       ) : null}
     </ScrollView>
@@ -268,6 +339,18 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#666',
+  },
+  hostBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  hostBadgeText: {
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '700',
   },
   card: {
     borderWidth: 1,
@@ -356,6 +439,17 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   leaveButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  cancelButton: {
+    backgroundColor: '#111827',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
