@@ -8,7 +8,6 @@ export type ActivityParticipantProfile = {
   profile: {
     id: string
     first_name: string | null
-    email: string | null
     avatar_url: string | null
     city: string | null
   } | null
@@ -23,10 +22,9 @@ export const activityParticipantProfileService = {
         activity_id,
         user_id,
         joined_at,
-        profiles:user_id (
+        public_profiles:user_id (
           id,
           first_name,
-          email,
           avatar_url,
           city
         )
@@ -43,13 +41,12 @@ export const activityParticipantProfileService = {
       activity_id: row.activity_id,
       user_id: row.user_id,
       joined_at: row.joined_at,
-      profile: row.profiles
+      profile: row.public_profiles
         ? {
-            id: row.profiles.id,
-            first_name: row.profiles.first_name,
-            email: row.profiles.email,
-            avatar_url: row.profiles.avatar_url,
-            city: row.profiles.city,
+            id: row.public_profiles.id,
+            first_name: row.public_profiles.first_name,
+            avatar_url: row.public_profiles.avatar_url,
+            city: row.public_profiles.city,
           }
         : null,
     }))

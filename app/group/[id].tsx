@@ -1,14 +1,14 @@
 import { useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import {
-    ActivityIndicator,
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native'
 import PuzzleBoard from '../../components/puzzle/PuzzleBoard'
 import { useActivity } from '../../hooks/useActivity'
@@ -28,6 +28,7 @@ export default function GroupScreen() {
   const userId = session?.user?.id ?? null
 
   const { activity, loading: activityLoading, error: activityError } = useActivity(activityId)
+
   const {
     participantProfiles,
     loading: participantsLoading,
@@ -36,7 +37,6 @@ export default function GroupScreen() {
 
   const {
     messages,
-    loading: messagesLoading,
     error: messagesError,
     sendMessage,
   } = useMessages(activityId, userId)
@@ -137,17 +137,14 @@ export default function GroupScreen() {
         {messages.length === 0 ? (
           <Text style={styles.value}>No messages yet</Text>
         ) : (
-                messages.map((message) => (
-                    <View key={message.id} style={styles.messageBubble}>
-                        <Text style={styles.messageAuthor}>
-                        {message.user_id === userId
-                            ? 'You'
-                            : message.author?.first_name ?? 'Unknown'}
-                        </Text>
-                        <Text style={styles.messageText}>{message.content}</Text>
-                        <Text style={styles.messageMeta}>{formatDate(message.created_at)}</Text>
-                    </View>
-
+          messages.map((message) => (
+            <View key={message.id} style={styles.messageBubble}>
+              <Text style={styles.messageAuthor}>
+                {message.user_id === userId ? 'You' : message.author?.first_name ?? 'Unknown'}
+              </Text>
+              <Text style={styles.messageText}>{message.content}</Text>
+              <Text style={styles.messageMeta}>{formatDate(message.created_at)}</Text>
+            </View>
           ))
         )}
 

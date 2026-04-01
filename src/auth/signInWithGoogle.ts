@@ -1,62 +1,61 @@
-import * as Linking from 'expo-linking'
+import * as AuthSession from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
+import { Platform } from 'react-native'
 import { supabase } from '../lib/supabase'
 
-function extractParamsFromUrl(url: string) {
-  const parsed = Linking.parse(url)
-  const queryParams = parsed.queryParams ?? {}
-
-  const hash = url.includes('#') ? url.split('#')[1] : ''
-  const hashParams = Object.fromEntries(new URLSearchParams(hash))
-
-  return {
-    ...queryParams,
-    ...hashParams,
-  }
-}
+WebBrowser.maybeCompleteAuthSession()
 
 export async function signInWithGoogle() {
-  const redirectTo = 'teamup://auth/callback'
+  if (Platform.OS === 'web') {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: {
+          prompt: 'select_account',
+        },
+      },
+    })
 
-  console.log('redirectTo =', redirectTo)
+    if (error) {
+      throw error
+    }
+
+    return null
+  }
+
+  const redirectTo = AuthSession.makeRedirectUri({
+    scheme: 'teamup',
+    path: 'auth/callback',
+  })
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
       skipBrowserRedirect: true,
+      queryParams: {
+        prompt: 'select_account',
+      },
     },
   })
 
-  if (error) throw error
-  if (!data?.url) throw new Error('Missing Google OAuth URL')
+  if (error) {
+    throw error
+  }
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
-
-  console.log('Auth session result =', result)
 
   if (result.type !== 'success') {
     return null
   }
 
-  const params = extractParamsFromUrl(result.url)
-  console.log('Parsed callback params =', params)
+  const { data: sessionData, error: exchangeError } =
+    await supabase.auth.exchangeCodeForSession(result.url)
 
-  const access_token = String(params.access_token ?? '')
-  const refresh_token = String(params.refresh_token ?? '')
-
-  if (!access_token || !refresh_token) {
-    throw new Error(
-      `Missing access_token or refresh_token. Returned keys: ${Object.keys(params).join(', ')}`
-    )
+  if (exchangeError) {
+    throw exchangeError
   }
-
-  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-    access_token,
-    refresh_token,
-  })
-
-  if (sessionError) throw sessionError
 
   return sessionData.session
 }

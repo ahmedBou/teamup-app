@@ -31,7 +31,6 @@ export default function ActivityDetailsScreen() {
   const { activity, loading, error } = useActivity(activityId)
 
   const {
-    participants,
     loading: participantsLoading,
     error: participantsError,
     participantCount,
@@ -215,7 +214,9 @@ export default function ActivityDetailsScreen() {
         </Text>
 
         <Text style={styles.label}>Status</Text>
-        <Text style={styles.value}>{isCancelled ? 'cancelled' : isFull ? 'full' : activity.status}</Text>
+        <Text style={styles.value}>
+          {isCancelled ? 'cancelled' : isFull ? 'full' : activity.status}
+        </Text>
 
         <Text style={styles.label}>Description</Text>
         <Text style={styles.value}>{activity.description ?? '—'}</Text>
@@ -248,9 +249,6 @@ export default function ActivityDetailsScreen() {
               <View style={styles.participantInfo}>
                 <Text style={styles.participantName}>
                   {participant.profile?.first_name ?? 'Unknown'}
-                </Text>
-                <Text style={styles.participantMeta}>
-                  {participant.profile?.email ?? 'No email'}
                 </Text>
                 <Text style={styles.participantMeta}>
                   {participant.profile?.city ?? 'No city'}

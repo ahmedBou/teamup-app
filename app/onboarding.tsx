@@ -1,14 +1,14 @@
 import { Redirect, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
-    ActivityIndicator,
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native'
 import { useAuth } from '../hooks/useAuth'
 import { useProfile } from '../hooks/useProfile'
@@ -16,6 +16,15 @@ import type { CyclingLevel, RidingStyle } from '../src/types/profile'
 
 const cyclingLevels: CyclingLevel[] = ['beginner', 'intermediate', 'advanced']
 const ridingStyles: RidingStyle[] = ['road', 'mtb', 'gravel', 'casual']
+
+function showWebSafeAlert(title: string, message: string) {
+  if (typeof window !== 'undefined') {
+    window.alert(`${title}\n\n${message}`)
+    return
+  }
+
+  Alert.alert(title, message)
+}
 
 export default function OnboardingScreen() {
   const router = useRouter()
@@ -41,28 +50,36 @@ export default function OnboardingScreen() {
   }, [profile])
 
   const handleSave = async () => {
+    console.log('SAVE BUTTON CLICKED')
+    console.log('userId =', userId)
+    console.log('firstName =', firstName)
+    console.log('city =', city)
+    console.log('bio =', bio)
+    console.log('cyclingLevel =', cyclingLevel)
+    console.log('ridingStyle =', ridingStyle)
+
     if (!userId) {
-      Alert.alert('Error', 'No authenticated user found')
+      showWebSafeAlert('Error', 'No authenticated user found')
       return
     }
 
     if (!firstName.trim()) {
-      Alert.alert('Missing info', 'Please enter your first name')
+      showWebSafeAlert('Missing info', 'Please enter your first name')
       return
     }
 
     if (!city.trim()) {
-      Alert.alert('Missing info', 'Please enter your city')
+      showWebSafeAlert('Missing info', 'Please enter your city')
       return
     }
 
     if (!cyclingLevel) {
-      Alert.alert('Missing info', 'Please choose your cycling level')
+      showWebSafeAlert('Missing info', 'Please choose your cycling level')
       return
     }
 
     if (!ridingStyle) {
-      Alert.alert('Missing info', 'Please choose your riding style')
+      showWebSafeAlert('Missing info', 'Please choose your riding style')
       return
     }
 
@@ -78,10 +95,11 @@ export default function OnboardingScreen() {
         onboarding_completed: true,
       })
 
-      router.replace('/(tabs)/home')
+      console.log('PROFILE UPDATED, redirecting...')
+      router.replace('/home')
     } catch (error: any) {
-      console.error('Onboarding save error:', error)
-      Alert.alert('Save failed', error?.message ?? 'Unknown error')
+      console.error('ONBOARDING SAVE ERROR:', error)
+      showWebSafeAlert('Save failed', error?.message ?? 'Unknown error')
     } finally {
       setSaving(false)
     }
@@ -100,7 +118,7 @@ export default function OnboardingScreen() {
   }
 
   if (profile?.onboarding_completed) {
-    return <Redirect href="/(tabs)/home" />
+    return <Redirect href="/home" />
   }
 
   return (
