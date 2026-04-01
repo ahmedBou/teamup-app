@@ -1,5 +1,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native'
 import PuzzleBoard from '../../components/puzzle/PuzzleBoard'
 import { useActivity } from '../../hooks/useActivity'
 import { useActivityParticipants } from '../../hooks/useActivityParticipants'
@@ -17,7 +26,9 @@ export default function ActivityDetailsScreen() {
   const { session } = useAuth()
   const userId = session?.user?.id ?? null
   const router = useRouter()
+
   const { activity, loading, error } = useActivity(activityId)
+
   const {
     participants,
     loading: participantsLoading,
@@ -25,6 +36,7 @@ export default function ActivityDetailsScreen() {
     participantCount,
     isJoined,
     join,
+    leave,
   } = useActivityParticipants(activityId, userId)
 
   const {
@@ -33,33 +45,6 @@ export default function ActivityDetailsScreen() {
     error: profilesError,
     refreshParticipantProfiles,
   } = useParticipantProfiles(activityId)
-
-  const handleJoin = async () => {
-    if (!activity) return
-
-    if (!userId) {
-      Alert.alert('Error', 'You must be logged in')
-      return
-    }
-
-    if (isJoined) {
-      Alert.alert('Already joined', 'You are already part of this activity')
-      return
-    }
-
-    if (participantCount >= activity.max_participants) {
-      Alert.alert('Activity full', 'This activity has reached max participants')
-      return
-    }
-
-    try {
-      await join()
-      await refreshParticipantProfiles()
-      Alert.alert('Joined', 'You joined the activity successfully')
-    } catch (err: any) {
-      Alert.alert('Join failed', err?.message ?? 'Unknown error')
-    }
-  }
 
   if (loading || participantsLoading || profilesLoading) {
     return (
@@ -86,6 +71,60 @@ export default function ActivityDetailsScreen() {
   }
 
   const isFull = participantCount >= activity.max_participants
+  const isHost = !!userId && activity.host_id === userId
+
+  const handleJoin = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'You must be logged in')
+      return
+    }
+
+    if (isJoined) {
+      Alert.alert('Already joined', 'You are already part of this activity')
+      return
+    }
+
+    if (isFull) {
+      Alert.alert('Activity full', 'This activity has reached max participants')
+      return
+    }
+
+    try {
+      await join()
+      await refreshParticipantProfiles()
+      Alert.alert('Joined', 'You joined the activity successfully')
+    } catch (err: any) {
+      Alert.alert('Join failed', err?.message ?? 'Unknown error')
+    }
+  }
+
+  const handleLeave = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'You must be logged in')
+      return
+    }
+
+    if (!isJoined) {
+      Alert.alert('Not joined', 'You are not part of this activity')
+      return
+    }
+
+    if (isHost) {
+      Alert.alert(
+        'Host cannot leave',
+        'As host, you cannot leave your own activity in this MVP. You must cancel it later.'
+      )
+      return
+    }
+
+    try {
+      await leave()
+      await refreshParticipantProfiles()
+      Alert.alert('Left activity', 'You left the activity successfully')
+    } catch (err: any) {
+      Alert.alert('Leave failed', err?.message ?? 'Unknown error')
+    }
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -163,30 +202,41 @@ export default function ActivityDetailsScreen() {
         )}
       </View>
 
-        <Pressable
+      <Pressable
         onPress={handleJoin}
         disabled={isJoined || isFull}
         style={[
-            styles.joinButton,
-            (isJoined || isFull) && styles.joinButtonDisabled,
+          styles.joinButton,
+          (isJoined || isFull) && styles.joinButtonDisabled,
         ]}
-        >
+      >
         <Text style={styles.joinButtonText}>
-            {isJoined ? 'Already joined' : isFull ? 'Activity full' : 'Join activity'}
+          {isJoined ? 'Already joined' : isFull ? 'Activity full' : 'Join activity'}
         </Text>
-        </Pressable>
+      </Pressable>
 
-        <Pressable
+      <Pressable
         onPress={() =>
-            router.push({
+          router.push({
             pathname: '/group/[id]',
             params: { id: activity.id },
-            })
+          })
         }
         style={styles.groupButton}
-        >
+      >
         <Text style={styles.groupButtonText}>Open group</Text>
+      </Pressable>
+
+      {isJoined ? (
+        <Pressable
+          onPress={handleLeave}
+          style={[styles.leaveButton, isHost && styles.leaveButtonDisabled]}
+        >
+          <Text style={styles.leaveButtonText}>
+            {isHost ? 'Host cannot leave' : 'Leave activity'}
+          </Text>
         </Pressable>
+      ) : null}
     </ScrollView>
   )
 }
@@ -285,6 +335,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0B1220',
   },
+  groupButton: {
+    backgroundColor: '#0B1220',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  groupButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  leaveButton: {
+    backgroundColor: '#ef4444',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  leaveButtonDisabled: {
+    opacity: 0.7,
+  },
+  leaveButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
   errorText: {
     color: 'red',
     fontSize: 16,
@@ -293,15 +368,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#555',
   },
-  groupButton: {
-  backgroundColor: '#0B1220',
-  paddingVertical: 16,
-  borderRadius: 14,
-  alignItems: 'center',
-},
-groupButtonText: {
-  fontSize: 16,
-  fontWeight: '700',
-  color: '#fff',
-},
 })

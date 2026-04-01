@@ -9,6 +9,7 @@ type UseActivityParticipantsResult = {
   isJoined: boolean
   refreshParticipants: () => Promise<void>
   join: () => Promise<void>
+  leave: () => Promise<void>
 }
 
 export function useActivityParticipants(
@@ -58,6 +59,26 @@ export function useActivityParticipants(
     }
   }, [activityId, userId])
 
+  const leave = useCallback(async () => {
+    if (!activityId || !userId) {
+      throw new Error('Missing activityId or userId')
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      await participantService.leaveActivity(activityId, userId)
+      const data = await participantService.listParticipants(activityId)
+      setParticipants(data)
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to leave activity')
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [activityId, userId])
+
   useEffect(() => {
     refreshParticipants()
   }, [refreshParticipants])
@@ -73,5 +94,6 @@ export function useActivityParticipants(
     isJoined,
     refreshParticipants,
     join,
+    leave,
   }
 }

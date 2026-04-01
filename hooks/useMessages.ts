@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { supabase } from '../src/lib/supabase'
 import { messageService, type GroupMessage } from '../src/services/messageService'
 
 type UseMessagesResult = {
@@ -38,11 +39,7 @@ export function useMessages(
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load messages')
     } finally {
-      if (!hasLoadedOnce.current) {
-        setLoading(false)
-      } else {
-        setLoading(false)
-      }
+      setLoading(false)
     }
   }, [activityId])
 
@@ -55,9 +52,6 @@ export function useMessages(
       try {
         setError(null)
         await messageService.sendMessage(activityId, userId, content)
-
-        const data = await messageService.listMessages(activityId)
-        setMessages(data)
       } catch (err: any) {
         setError(err?.message ?? 'Failed to send message')
         throw err
@@ -74,12 +68,31 @@ export function useMessages(
   useEffect(() => {
     if (!activityId) return
 
-    const interval = setInterval(() => {
-      refreshMessages()
-    }, 4000)
+    const channel = supabase
+      .channel(`messages:${activityId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+          filter: `activity_id=eq.${activityId}`,
+        },
+        async () => {
+          try {
+            const data = await messageService.listMessages(activityId)
+            setMessages(data)
+          } catch (err: any) {
+            setError(err?.message ?? 'Failed to sync realtime messages')
+          }
+        }
+      )
+      .subscribe()
 
-    return () => clearInterval(interval)
-  }, [activityId, refreshMessages])
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [activityId])
 
   return {
     messages,
