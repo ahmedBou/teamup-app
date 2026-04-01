@@ -68,3 +68,48 @@ Welcome
 → Join Activity
 → Group Screen
 → Chat
+
+## Current Status
+
+### Sprint 4 Progress
+
+The MVP is now beyond the initial foundation stage and includes a working social activity loop.
+
+### Completed
+- Google authentication
+- session persistence
+- profile auto-creation
+- onboarding flow
+- editable profile
+- discover feed
+- create activity flow
+- activity details screen
+- participant join flow
+- host auto-join
+- leave activity flow
+- host controls
+- activity cancel flow
+- reusable PuzzleBoard
+- group screen
+- chat V1
+- improved date/time input for activity creation
+
+### In Review
+- automatic `open/full` activity status sync
+- leave activity edge-case validation
+
+### In Progress
+- realtime group chat validation across multiple clients
+
+### Product State
+The app now supports the full core loop:
+
+```text id="r6g4ks"
+Login
+→ Onboarding
+→ Discover
+→ Create Activity
+→ Activity Details
+→ Join
+→ Group
+→ Chat
