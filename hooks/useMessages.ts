@@ -5,6 +5,7 @@ import { messageService, type GroupMessage } from '../src/services/messageServic
 type UseMessagesResult = {
   messages: GroupMessage[]
   loading: boolean
+  refreshing: boolean
   error: string | null
   refreshMessages: () => Promise<void>
   sendMessage: (content: string) => Promise<void>
@@ -12,23 +13,30 @@ type UseMessagesResult = {
 
 export function useMessages(
   activityId?: string | null,
-  userId?: string | null
+  userId?: string | null,
+  enabled: boolean = true
 ): UseMessagesResult {
   const [messages, setMessages] = useState<GroupMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
   const hasLoadedOnce = useRef(false)
 
   const refreshMessages = useCallback(async () => {
-    if (!activityId) {
+    if (!activityId || !enabled) {
       setMessages([])
+      setError(null)
       setLoading(false)
+      setRefreshing(false)
       return
     }
 
     try {
       if (!hasLoadedOnce.current) {
         setLoading(true)
+      } else {
+        setRefreshing(true)
       }
 
       setError(null)
@@ -40,13 +48,18 @@ export function useMessages(
       setError(err?.message ?? 'Failed to load messages')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
-  }, [activityId])
+  }, [activityId, enabled])
 
   const sendMessageAction = useCallback(
     async (content: string) => {
       if (!activityId || !userId) {
         throw new Error('Missing activityId or userId')
+      }
+
+      if (!enabled) {
+        throw new Error('You must join this ride to use the chat')
       }
 
       try {
@@ -57,7 +70,7 @@ export function useMessages(
         throw err
       }
     },
-    [activityId, userId]
+    [activityId, userId, enabled]
   )
 
   useEffect(() => {
@@ -66,7 +79,7 @@ export function useMessages(
   }, [refreshMessages])
 
   useEffect(() => {
-    if (!activityId) return
+    if (!activityId || !enabled) return
 
     const channel = supabase
       .channel(`messages:${activityId}`)
@@ -92,11 +105,12 @@ export function useMessages(
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [activityId])
+  }, [activityId, enabled])
 
   return {
     messages,
     loading,
+    refreshing,
     error,
     refreshMessages,
     sendMessage: sendMessageAction,

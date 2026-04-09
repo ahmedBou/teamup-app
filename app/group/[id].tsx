@@ -1,9 +1,10 @@
 import { useLocalSearchParams } from 'expo-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,7 @@ import { useActivity } from '../../hooks/useActivity'
 import { useAuth } from '../../hooks/useAuth'
 import { useMessages } from '../../hooks/useMessages'
 import { useParticipantProfiles } from '../../hooks/useParticipantProfiles'
+import { notificationService } from '../../src/services/notificationService'
 
 function formatDate(dateString: string) {
   const date = new Date(dateString)
@@ -24,32 +26,71 @@ function formatDate(dateString: string) {
 export default function GroupScreen() {
   const params = useLocalSearchParams<{ id?: string }>()
   const activityId = params.id ?? null
+
   const { session } = useAuth()
   const userId = session?.user?.id ?? null
 
-  const { activity, loading: activityLoading, error: activityError } = useActivity(activityId)
+  const {
+    activity,
+    loading: activityLoading,
+    error: activityError,
+  } = useActivity(activityId)
 
   const {
     participantProfiles,
     loading: participantsLoading,
     error: participantsError,
+    refreshParticipantProfiles,
   } = useParticipantProfiles(activityId)
+
+  const isParticipant =
+    !!userId && participantProfiles.some((participant) => participant.user_id === userId)
+
+  const canAccessChat = !!userId && isParticipant
+
+  useEffect(() => {
+  if (!activityId || !canAccessChat) return
+
+  void notificationService.markMessageNotificationsAsReadForActivity(activityId)
+}, [activityId, canAccessChat])
 
   const {
     messages,
+    loading: messagesLoading,
+    refreshing: messagesRefreshing,
     error: messagesError,
+    refreshMessages,
     sendMessage,
-  } = useMessages(activityId, userId)
+  } = useMessages(activityId, userId, canAccessChat)
 
   const [messageText, setMessageText] = useState('')
   const [sending, setSending] = useState(false)
 
+  const handleRefresh = async () => {
+    try {
+      if (canAccessChat) {
+        await Promise.all([refreshParticipantProfiles(), refreshMessages()])
+      } else {
+        await refreshParticipantProfiles()
+      }
+    } catch {
+      // les erreurs sont déjà gérées dans les hooks
+    }
+  }
+
   const handleSend = async () => {
-    if (!messageText.trim()) return
+    if (!canAccessChat) {
+      Alert.alert('Access denied', 'Join this ride to use the chat.')
+      return
+    }
+
+    const trimmed = messageText.trim()
+
+    if (!trimmed) return
 
     try {
       setSending(true)
-      await sendMessage(messageText)
+      await sendMessage(trimmed)
       setMessageText('')
     } catch (error: any) {
       Alert.alert('Send failed', error?.message ?? 'Unknown error')
@@ -83,9 +124,17 @@ export default function GroupScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={canAccessChat ? messagesRefreshing : false}
+          onRefresh={handleRefresh}
+        />
+      }
+    >
       <Text style={styles.title}>{activity.title}</Text>
-      <Text style={styles.subtitle}>Group screen</Text>
+      <Text style={styles.subtitle}>Chat with the group</Text>
 
       <PuzzleBoard
         participants={participantProfiles.map((item) => ({
@@ -103,66 +152,138 @@ export default function GroupScreen() {
         <Text style={styles.label}>Start time</Text>
         <Text style={styles.value}>{formatDate(activity.start_time)}</Text>
 
-        <Text style={styles.label}>Participants</Text>
+        <Text style={styles.label}>Riders</Text>
         <Text style={styles.value}>
           {participantProfiles.length} / {activity.max_participants}
         </Text>
       </View>
 
       {participantsError ? <Text style={styles.errorText}>{participantsError}</Text> : null}
-      {messagesError ? <Text style={styles.errorText}>{messagesError}</Text> : null}
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Participants</Text>
+        <Text style={styles.sectionTitle}>Riders</Text>
 
         {participantProfiles.length === 0 ? (
-          <Text style={styles.value}>No participants yet</Text>
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>No riders yet</Text>
+            <Text style={styles.emptySubtitle}>
+              People who join this ride will appear here.
+            </Text>
+          </View>
         ) : (
           participantProfiles.map((participant) => (
             <View key={participant.participant_id} style={styles.participantRow}>
-              <Text style={styles.participantName}>
-                {participant.profile?.first_name ?? 'Unknown'}
-              </Text>
-              <Text style={styles.participantMeta}>
-                {participant.profile?.city ?? 'No city'}
-              </Text>
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarFallbackText}>
+                  {participant.profile?.first_name?.[0]?.toUpperCase() ?? '?'}
+                </Text>
+              </View>
+
+              <View style={styles.participantInfo}>
+                <Text style={styles.participantName}>
+                  {participant.profile?.first_name ?? 'Unknown'}
+                </Text>
+                <Text style={styles.participantMeta}>
+                  {participant.profile?.city ?? 'No city'}
+                </Text>
+              </View>
             </View>
           ))
         )}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Chat</Text>
+        <View style={styles.chatHeaderRow}>
+          <Text style={styles.sectionTitle}>Chat</Text>
 
-        {messages.length === 0 ? (
-          <Text style={styles.value}>No messages yet</Text>
+          {canAccessChat ? (
+            <Pressable style={styles.refreshSmallButton} onPress={handleRefresh}>
+              <Text style={styles.refreshSmallButtonText}>Refresh</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {!userId ? (
+          <View style={styles.restrictedBox}>
+            <Text style={styles.emptyTitle}>Login required</Text>
+            <Text style={styles.emptySubtitle}>
+              You need to be logged in to access the group chat.
+            </Text>
+          </View>
+        ) : !canAccessChat ? (
+          <View style={styles.restrictedBox}>
+            <Text style={styles.emptyTitle}>Chat locked</Text>
+            <Text style={styles.emptySubtitle}>
+              Join this ride to read and send messages in the group chat.
+            </Text>
+          </View>
+        ) : messagesLoading ? (
+          <View style={styles.chatStateBox}>
+            <ActivityIndicator />
+            <Text style={styles.chatStateText}>Loading chat...</Text>
+          </View>
+        ) : messagesError ? (
+          <View style={styles.chatStateBox}>
+            <Text style={styles.errorText}>{messagesError}</Text>
+            <Pressable style={styles.retryButton} onPress={refreshMessages}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>No messages yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Say hi and start the conversation.
+            </Text>
+          </View>
         ) : (
-          messages.map((message) => (
-            <View key={message.id} style={styles.messageBubble}>
-              <Text style={styles.messageAuthor}>
-                {message.user_id === userId ? 'You' : message.author?.first_name ?? 'Unknown'}
-              </Text>
-              <Text style={styles.messageText}>{message.content}</Text>
-              <Text style={styles.messageMeta}>{formatDate(message.created_at)}</Text>
-            </View>
-          ))
+          messages.map((message) => {
+            const isMine = message.user_id === userId
+
+            return (
+              <View
+                key={message.id}
+                style={[
+                  styles.messageBubble,
+                  isMine ? styles.myMessageBubble : styles.otherMessageBubble,
+                ]}
+              >
+                <Text style={styles.messageAuthor}>
+                  {isMine ? 'You' : message.author?.first_name ?? 'Unknown'}
+                </Text>
+
+                <Text style={styles.messageText}>{message.content}</Text>
+
+                <Text style={styles.messageMeta}>
+                  {formatDate(message.created_at)}
+                </Text>
+              </View>
+            )
+          })
         )}
 
         <TextInput
           value={messageText}
           onChangeText={setMessageText}
-          placeholder="Write a message..."
-          style={styles.input}
+          placeholder={
+            canAccessChat ? 'Write to the group...' : 'Join the ride to use the chat'
+          }
+          editable={canAccessChat && !sending}
           multiline
+          style={[styles.input, !canAccessChat && styles.inputDisabled]}
         />
 
         <Pressable
           onPress={handleSend}
-          disabled={sending}
-          style={[styles.sendButton, sending && styles.sendButtonDisabled]}
+          disabled={!canAccessChat || sending || !messageText.trim()}
+          style={[
+            styles.sendButton,
+            (!canAccessChat || sending || !messageText.trim()) &&
+              styles.sendButtonDisabled,
+          ]}
         >
           <Text style={styles.sendButtonText}>
-            {sending ? 'Sending...' : 'Send message'}
+            {sending ? 'Sending...' : 'Send'}
           </Text>
         </Pressable>
       </View>
@@ -221,9 +342,28 @@ const styles = StyleSheet.create({
     color: '#111',
   },
   participantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#eee',
-    paddingTop: 10,
+  },
+  avatarFallback: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#0B1220',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarFallbackText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  participantInfo: {
+    flex: 1,
   },
   participantName: {
     fontSize: 16,
@@ -235,10 +375,69 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
   },
+  chatHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  refreshSmallButton: {
+    backgroundColor: '#0B1220',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  refreshSmallButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  chatStateBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    gap: 12,
+  },
+  chatStateText: {
+    fontSize: 15,
+    color: '#666',
+  },
+  emptyBox: {
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    borderRadius: 14,
+    padding: 16,
+    backgroundColor: '#fff',
+  },
+  restrictedBox: {
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderRadius: 14,
+    padding: 16,
+    backgroundColor: '#fff7ed',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111',
+  },
+  emptySubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#666',
+  },
   messageBubble: {
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 10,
+    borderRadius: 14,
+    padding: 14,
+    gap: 6,
+  },
+  myMessageBubble: {
+    backgroundColor: '#dcfce7',
+  },
+  otherMessageBubble: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
   },
   messageAuthor: {
     fontSize: 14,
@@ -248,13 +447,11 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 15,
     color: '#111',
-    marginTop: 4,
     lineHeight: 22,
   },
   messageMeta: {
     fontSize: 12,
     color: '#666',
-    marginTop: 6,
   },
   input: {
     borderWidth: 1,
@@ -267,6 +464,10 @@ const styles = StyleSheet.create({
     minHeight: 90,
     textAlignVertical: 'top',
     marginTop: 10,
+  },
+  inputDisabled: {
+    backgroundColor: '#f3f4f6',
+    color: '#666',
   },
   sendButton: {
     backgroundColor: '#22c55e',
@@ -282,6 +483,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0B1220',
+  },
+  retryButton: {
+    backgroundColor: '#0B1220',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: '700',
   },
   errorText: {
     color: 'red',
