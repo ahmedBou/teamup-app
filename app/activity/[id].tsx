@@ -1,9 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
   Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,14 +23,31 @@ function formatDate(dateString: string) {
   return date.toLocaleString()
 }
 
+function getDisplayStatus(
+  status: string,
+  participantCount: number,
+  maxParticipants: number
+) {
+  if (status === 'cancelled') return 'Ride cancelled'
+  if (status === 'completed') return 'Ride completed'
+  if (status === 'full' || participantCount >= maxParticipants) return 'Ride is full'
+  return 'Open'
+}
+
 export default function ActivityDetailsScreen() {
   const params = useLocalSearchParams<{ id?: string }>()
   const activityId = params.id ?? null
-  const { session } = useAuth()
-  const userId = session?.user?.id ?? null
   const router = useRouter()
 
-  const { activity, loading, error } = useActivity(activityId)
+  const { session } = useAuth()
+  const userId = session?.user?.id ?? null
+
+  const {
+    activity,
+    loading,
+    error,
+    refreshActivity,
+  } = useActivity(activityId)
 
   const {
     loading: participantsLoading,
@@ -37,6 +56,7 @@ export default function ActivityDetailsScreen() {
     isJoined,
     join,
     leave,
+    refreshParticipants,
   } = useActivityParticipants(activityId, userId)
 
   const {
@@ -45,6 +65,21 @@ export default function ActivityDetailsScreen() {
     error: profilesError,
     refreshParticipantProfiles,
   } = useParticipantProfiles(activityId)
+
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true)
+      await Promise.all([
+        refreshActivity(),
+        refreshParticipants(),
+        refreshParticipantProfiles(),
+      ])
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   if (loading || participantsLoading || profilesLoading) {
     return (
@@ -65,47 +100,57 @@ export default function ActivityDetailsScreen() {
   if (!activity) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.emptyText}>Activity not found</Text>
+        <Text style={styles.emptyText}>Ride not found</Text>
       </View>
     )
   }
 
-  const isFull = participantCount >= activity.max_participants
   const isHost = !!userId && activity.host_id === userId
   const isCancelled = activity.status === 'cancelled'
+  const isCompleted = activity.status === 'completed'
+  const isFull =
+    activity.status === 'full' || participantCount >= activity.max_participants
+
+  const canJoin = !!userId && !isJoined && !isCancelled && !isCompleted && !isFull
+  const canLeave = !!userId && isJoined && !isHost
+  const canCancel = !!userId && isHost && !isCancelled
+  const canOpenChat = !!userId && isJoined
 
   const handleJoin = async () => {
     if (!userId) {
-      Alert.alert('Error', 'You must be logged in')
+      Alert.alert('Login required', 'You must be logged in to join this ride.')
       return
     }
 
     if (isCancelled) {
-      Alert.alert('Cancelled', 'This activity has been cancelled')
+      Alert.alert('Ride cancelled', 'This ride has been cancelled.')
+      return
+    }
+
+    if (isCompleted) {
+      Alert.alert('Ride completed', 'This ride is already completed.')
       return
     }
 
     if (isJoined) {
-      Alert.alert('Already joined', 'You are already part of this activity')
+      Alert.alert('You joined this ride', 'You are already part of this ride.')
       return
     }
 
     if (isFull) {
-      Alert.alert('Activity full', 'This activity has reached max participants')
+      Alert.alert('Ride is full', 'This ride has reached max riders.')
       return
     }
 
     try {
       await join()
-      await refreshParticipantProfiles()
+      await Promise.all([
+        refreshActivity(),
+        refreshParticipants(),
+        refreshParticipantProfiles(),
+      ])
 
-      const newCount = participantCount + 1
-
-      if (newCount >= activity.max_participants) {
-        await activityService.updateActivityStatus(activity.id, 'full')
-      }
-
-      Alert.alert('Joined', 'You joined the activity successfully')
+      Alert.alert('Joined', 'You joined this ride successfully.')
     } catch (err: any) {
       Alert.alert('Join failed', err?.message ?? 'Unknown error')
     }
@@ -113,53 +158,56 @@ export default function ActivityDetailsScreen() {
 
   const handleLeave = async () => {
     if (!userId) {
-      Alert.alert('Error', 'You must be logged in')
+      Alert.alert('Login required', 'You must be logged in to leave this ride.')
       return
     }
 
     if (!isJoined) {
-      Alert.alert('Not joined', 'You are not part of this activity')
+      Alert.alert('Not joined', 'You are not part of this ride.')
       return
     }
 
     if (isHost) {
       Alert.alert(
         'Host cannot leave',
-        'As host, you cannot leave your own activity in this MVP. You must cancel it later.'
+        'As the host, you can’t leave this ride. You can cancel it instead.'
       )
       return
     }
 
     try {
       await leave()
-      await refreshParticipantProfiles()
+      await Promise.all([
+        refreshActivity(),
+        refreshParticipants(),
+        refreshParticipantProfiles(),
+      ])
 
-      const newCount = participantCount - 1
-
-      if (newCount < activity.max_participants) {
-        await activityService.updateActivityStatus(activity.id, 'open')
-      }
-
-      Alert.alert('Left activity', 'You left the activity successfully')
+      Alert.alert('Left ride', 'You left this ride successfully.')
     } catch (err: any) {
       Alert.alert('Leave failed', err?.message ?? 'Unknown error')
     }
   }
 
-  const handleCancelActivity = async () => {
+  const handleCancelRide = () => {
     if (!userId) {
-      Alert.alert('Error', 'You must be logged in')
+      Alert.alert('Login required', 'You must be logged in to cancel this ride.')
       return
     }
 
     if (!isHost) {
-      Alert.alert('Forbidden', 'Only the host can cancel this activity')
+      Alert.alert('Forbidden', 'Only the host can cancel this ride.')
+      return
+    }
+
+    if (isCancelled) {
+      Alert.alert('Ride cancelled', 'This ride is already cancelled.')
       return
     }
 
     Alert.alert(
-      'Cancel activity',
-      'Are you sure you want to cancel this activity?',
+      'Cancel ride',
+      'Are you sure you want to cancel this ride?',
       [
         { text: 'No', style: 'cancel' },
         {
@@ -168,7 +216,8 @@ export default function ActivityDetailsScreen() {
           onPress: async () => {
             try {
               await activityService.cancelActivity(activity.id)
-              Alert.alert('Cancelled', 'The activity has been cancelled')
+              await refreshActivity()
+              Alert.alert('Cancelled', 'This ride has been cancelled.')
             } catch (err: any) {
               Alert.alert('Cancel failed', err?.message ?? 'Unknown error')
             }
@@ -178,14 +227,48 @@ export default function ActivityDetailsScreen() {
     )
   }
 
+  const handleOpenChat = () => {
+    if (!userId) {
+      Alert.alert('Login required', 'You must be logged in to access the chat.')
+      return
+    }
+
+    if (!isJoined) {
+      Alert.alert('Join required', 'Join this ride to access the chat.')
+      return
+    }
+
+    router.push({
+      pathname: '/group/[id]',
+      params: { id: activity.id },
+    })
+  }
+
+  const joinButtonLabel = isCancelled
+    ? 'Ride cancelled'
+    : isCompleted
+    ? 'Ride completed'
+    : isJoined
+    ? 'You joined this ride'
+    : isFull
+    ? 'Ride is full'
+    : 'Join ride'
+
+  const openChatLabel = canOpenChat ? 'Open chat' : 'Join ride to access chat'
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
+    >
       <Text style={styles.title}>{activity.title}</Text>
-      <Text style={styles.subtitle}>Activity details</Text>
+      <Text style={styles.subtitle}>Ride details</Text>
 
       {isHost ? (
         <View style={styles.hostBadge}>
-          <Text style={styles.hostBadgeText}>You are the host</Text>
+          <Text style={styles.hostBadgeText}>You’re hosting this ride</Text>
         </View>
       ) : null}
 
@@ -208,14 +291,14 @@ export default function ActivityDetailsScreen() {
         <Text style={styles.label}>Start time</Text>
         <Text style={styles.value}>{formatDate(activity.start_time)}</Text>
 
-        <Text style={styles.label}>Participants</Text>
+        <Text style={styles.label}>Riders</Text>
         <Text style={styles.value}>
           {participantCount} / {activity.max_participants}
         </Text>
 
         <Text style={styles.label}>Status</Text>
         <Text style={styles.value}>
-          {isCancelled ? 'cancelled' : isFull ? 'full' : activity.status}
+          {getDisplayStatus(activity.status, participantCount, activity.max_participants)}
         </Text>
 
         <Text style={styles.label}>Description</Text>
@@ -226,10 +309,10 @@ export default function ActivityDetailsScreen() {
       {profilesError ? <Text style={styles.errorText}>{profilesError}</Text> : null}
 
       <View style={styles.card}>
-        <Text style={styles.label}>Participants</Text>
+        <Text style={styles.sectionTitle}>Riders</Text>
 
         {participantProfiles.length === 0 ? (
-          <Text style={styles.value}>No participants yet</Text>
+          <Text style={styles.value}>No riders yet</Text>
         ) : (
           participantProfiles.map((participant) => (
             <View key={participant.participant_id} style={styles.participantRow}>
@@ -261,49 +344,41 @@ export default function ActivityDetailsScreen() {
 
       <Pressable
         onPress={handleJoin}
-        disabled={isJoined || isFull || isCancelled}
-        style={[
-          styles.joinButton,
-          (isJoined || isFull || isCancelled) && styles.joinButtonDisabled,
-        ]}
+        disabled={!canJoin}
+        style={[styles.joinButton, !canJoin && styles.joinButtonDisabled]}
       >
-        <Text style={styles.joinButtonText}>
-          {isCancelled
-            ? 'Activity cancelled'
-            : isJoined
-            ? 'Already joined'
-            : isFull
-            ? 'Activity full'
-            : 'Join activity'}
-        </Text>
+        <Text style={styles.joinButtonText}>{joinButtonLabel}</Text>
       </Pressable>
 
       <Pressable
-        onPress={() =>
-          router.push({
-            pathname: '/group/[id]',
-            params: { id: activity.id },
-          })
-        }
-        style={styles.groupButton}
+        onPress={handleOpenChat}
+        disabled={!canOpenChat}
+        style={[styles.groupButton, !canOpenChat && styles.groupButtonDisabled]}
       >
-        <Text style={styles.groupButtonText}>Open group</Text>
+        <Text style={styles.groupButtonText}>{openChatLabel}</Text>
       </Pressable>
 
       {isJoined ? (
         <Pressable
           onPress={handleLeave}
-          style={[styles.leaveButton, isHost && styles.leaveButtonDisabled]}
+          disabled={!canLeave}
+          style={[styles.leaveButton, !canLeave && styles.leaveButtonDisabled]}
         >
           <Text style={styles.leaveButtonText}>
-            {isHost ? 'Host cannot leave' : 'Leave activity'}
+            {isHost ? 'Host cannot leave' : 'Leave ride'}
           </Text>
         </Pressable>
       ) : null}
 
       {isHost ? (
-        <Pressable onPress={handleCancelActivity} style={styles.cancelButton}>
-          <Text style={styles.cancelButtonText}>Cancel activity</Text>
+        <Pressable
+          onPress={handleCancelRide}
+          disabled={!canCancel}
+          style={[styles.cancelButton, !canCancel && styles.cancelButtonDisabled]}
+        >
+          <Text style={styles.cancelButtonText}>
+            {isCancelled ? 'Ride cancelled' : 'Cancel ride'}
+          </Text>
         </Pressable>
       ) : null}
     </ScrollView>
@@ -357,6 +432,10 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 8,
     backgroundColor: '#fafafa',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
   },
   label: {
     fontSize: 13,
@@ -422,6 +501,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
   },
+  groupButtonDisabled: {
+    opacity: 0.7,
+  },
   groupButtonText: {
     fontSize: 16,
     fontWeight: '700',
@@ -446,6 +528,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
+  },
+  cancelButtonDisabled: {
+    opacity: 0.7,
   },
   cancelButtonText: {
     fontSize: 16,
