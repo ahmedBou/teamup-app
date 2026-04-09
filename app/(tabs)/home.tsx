@@ -9,12 +9,24 @@ import {
   Text,
   View,
 } from 'react-native'
+import PuzzlePreview from '../../components/puzzle/PuzzlePreview'
 import { useActivities } from '../../hooks/useActivities'
 import { useNotifications } from '../../hooks/useNotifications'
 
 function formatDate(dateString: string) {
   const date = new Date(dateString)
   return date.toLocaleString()
+}
+
+function getCardStatus(
+  status: string,
+  participantCount: number,
+  maxParticipants: number
+) {
+  if (status === 'cancelled') return 'Cancelled'
+  if (status === 'completed') return 'Completed'
+  if (status === 'full' || participantCount >= maxParticipants) return 'Full'
+  return 'Open'
 }
 
 export default function HomeScreen() {
@@ -38,11 +50,14 @@ export default function HomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Find a rides</Text>
+      <Text style={styles.title}>Find rides</Text>
       <Text style={styles.subtitle}>Join local cycling groups around you.</Text>
 
       <View style={styles.actionRow}>
-        <Pressable style={styles.refreshButton} onPress={() => void refreshActivities()}>
+        <Pressable
+          style={styles.refreshButton}
+          onPress={() => void refreshActivities()}
+        >
           <Text style={styles.refreshButtonText}>Refresh</Text>
         </Pressable>
 
@@ -81,39 +96,68 @@ export default function HomeScreen() {
           </Text>
         </View>
       ) : (
-        activities.map((activity) => (
-          <Pressable
-            key={activity.id}
-            style={styles.card}
-            onPress={() => router.push(`/activity/${activity.id}`)}
-          >
-            <Text style={styles.cardTitle}>{activity.title}</Text>
+        activities.map((activity) => {
+          const participantCount = activity.participant_count ?? 0
+          const cardStatus = getCardStatus(
+            activity.status,
+            participantCount,
+            activity.max_participants
+          )
 
-            <Text style={styles.label}>Type</Text>
-            <Text style={styles.value}>{activity.activity_type}</Text>
+          return (
+            <Pressable
+              key={activity.id}
+              style={styles.card}
+              onPress={() => router.push(`/activity/${activity.id}`)}
+            >
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{activity.title}</Text>
 
-            <Text style={styles.label}>City</Text>
-            <Text style={styles.value}>{activity.city}</Text>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    cardStatus === 'Cancelled'
+                      ? styles.statusBadgeCancelled
+                      : cardStatus === 'Full'
+                      ? styles.statusBadgeFull
+                      : cardStatus === 'Completed'
+                      ? styles.statusBadgeCompleted
+                      : styles.statusBadgeOpen,
+                  ]}
+                >
+                  <Text style={styles.statusBadgeText}>{cardStatus}</Text>
+                </View>
+              </View>
 
-            <Text style={styles.label}>Start time</Text>
-            <Text style={styles.value}>{formatDate(activity.start_time)}</Text>
+              <Text style={styles.label}>Type</Text>
+              <Text style={styles.value}>{activity.activity_type}</Text>
 
-            <Text style={styles.label}>Max participants</Text>
-            <Text style={styles.value}>{activity.max_participants}</Text>
+              <Text style={styles.label}>City</Text>
+              <Text style={styles.value}>{activity.city}</Text>
 
-            <Text style={styles.label}>Status</Text>
-            <Text style={styles.value}>{activity.status}</Text>
+              <Text style={styles.label}>Start time</Text>
+              <Text style={styles.value}>{formatDate(activity.start_time)}</Text>
 
-            {activity.description ? (
-              <>
-                <Text style={styles.label}>Description</Text>
-                <Text style={styles.value}>{activity.description}</Text>
-              </>
-            ) : null}
+              <Text style={styles.label}>Max participants</Text>
+              <Text style={styles.value}>{activity.max_participants}</Text>
 
-            <Text style={styles.openHint}>View ride details</Text>
-          </Pressable>
-        ))
+              <PuzzlePreview
+                participantCount={participantCount}
+                maxParticipants={activity.max_participants}
+                status={activity.status}
+              />
+
+              {activity.description ? (
+                <>
+                  <Text style={styles.label}>Description</Text>
+                  <Text style={styles.value}>{activity.description}</Text>
+                </>
+              ) : null}
+
+              <Text style={styles.openHint}>View ride details</Text>
+            </Pressable>
+          )
+        })
       )}
     </ScrollView>
   )
@@ -216,10 +260,39 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: '#fafafa',
   },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
   cardTitle: {
+    flex: 1,
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  statusBadgeOpen: {
+    backgroundColor: '#dcfce7',
+  },
+  statusBadgeFull: {
+    backgroundColor: '#fee2e2',
+  },
+  statusBadgeCancelled: {
+    backgroundColor: '#e5e7eb',
+  },
+  statusBadgeCompleted: {
+    backgroundColor: '#dbeafe',
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
   },
   label: {
     fontSize: 13,

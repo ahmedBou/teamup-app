@@ -1,6 +1,10 @@
 import { supabase } from '../lib/supabase'
 import type { Activity, CreateActivityInput } from '../types/activity'
 
+type ActivityRow = Omit<Activity, 'participant_count'> & {
+  participant_count?: number
+}
+
 function sortActivitiesByStartTime(items: Activity[]): Activity[] {
   return [...items].sort(
     (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
@@ -22,7 +26,36 @@ export const activityService = {
       throw error
     }
 
-    return (data ?? []) as Activity[]
+    const activities = (data ?? []) as ActivityRow[]
+
+    if (activities.length === 0) {
+      return []
+    }
+
+    const activityIds = activities.map((activity) => activity.id)
+
+    const { data: participantRows, error: participantError } = await supabase
+      .from('activity_participants')
+      .select('activity_id')
+      .in('activity_id', activityIds)
+
+    if (participantError) {
+      throw participantError
+    }
+
+    const countMap = new Map<string, number>()
+
+    for (const row of participantRows ?? []) {
+      const activityId = row.activity_id as string
+      countMap.set(activityId, (countMap.get(activityId) ?? 0) + 1)
+    }
+
+    const enrichedActivities: Activity[] = activities.map((activity) => ({
+      ...activity,
+      participant_count: countMap.get(activity.id) ?? 0,
+    }))
+
+    return sortActivitiesByStartTime(enrichedActivities)
   },
 
   async createActivity(input: CreateActivityInput): Promise<Activity> {
@@ -44,7 +77,7 @@ export const activityService = {
       throw error
     }
 
-    const activity = data as Activity
+    const activity = data as Omit<Activity, 'participant_count'>
 
     const { error: participantError } = await supabase
       .from('activity_participants')
@@ -57,7 +90,10 @@ export const activityService = {
       throw participantError
     }
 
-    return activity
+    return {
+      ...activity,
+      participant_count: 1,
+    }
   },
 
   async getActivityById(activityId: string): Promise<Activity | null> {
@@ -71,7 +107,21 @@ export const activityService = {
       throw error
     }
 
-    return data as Activity | null
+    if (!data) return null
+
+    const { count, error: countError } = await supabase
+      .from('activity_participants')
+      .select('*', { count: 'exact', head: true })
+      .eq('activity_id', activityId)
+
+    if (countError) {
+      throw countError
+    }
+
+    return {
+      ...(data as Omit<Activity, 'participant_count'>),
+      participant_count: count ?? 0,
+    }
   },
 
   async listHostedActivities(userId: string): Promise<Activity[]> {
@@ -85,7 +135,14 @@ export const activityService = {
       throw error
     }
 
-    return (data ?? []) as Activity[]
+    const activities = ((data ?? []) as Omit<Activity, 'participant_count'>[]).map(
+      (activity) => ({
+        ...activity,
+        participant_count: 0,
+      })
+    )
+
+    return sortActivitiesByStartTime(activities)
   },
 
   async listJoinedActivities(userId: string): Promise<Activity[]> {
@@ -113,7 +170,14 @@ export const activityService = {
       throw error
     }
 
-    return sortActivitiesByStartTime((data ?? []) as Activity[])
+    const activities = ((data ?? []) as Omit<Activity, 'participant_count'>[]).map(
+      (activity) => ({
+        ...activity,
+        participant_count: 0,
+      })
+    )
+
+    return sortActivitiesByStartTime(activities)
   },
 
   async updateActivityStatus(

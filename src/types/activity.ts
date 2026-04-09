@@ -1,4 +1,9 @@
-export type ActivityType = 'road_ride' | 'mtb_ride' | 'gravel_ride' | 'casual_ride'
+export type ActivityType =
+  | 'road_ride'
+  | 'mtb_ride'
+  | 'gravel_ride'
+  | 'casual_ride'
+
 export type ActivityStatus = 'open' | 'full' | 'cancelled' | 'completed'
 
 export type Activity = {
@@ -10,6 +15,7 @@ export type Activity = {
   city: string
   start_time: string
   max_participants: number
+  participant_count: number
   status: ActivityStatus
   created_at: string
   updated_at: string

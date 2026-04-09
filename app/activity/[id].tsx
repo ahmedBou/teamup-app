@@ -279,8 +279,21 @@ export default function ActivityDetailsScreen() {
           avatarUrl: item.profile?.avatar_url ?? null,
         }))}
         maxParticipants={activity.max_participants}
+        title="Complete the team"
+        emptyText="Be the first rider"
+        partialText={`${participantCount} / ${activity.max_participants} spots filled`}
+        fullText="Team complete"
       />
-
+        {/* Microcopy  */}
+      <Text style={styles.teamHint}>
+        {isFull
+          ? 'This ride is complete.'
+          : isHost
+          ? 'You started this team.'
+          : isJoined
+          ? 'You are part of this team.'
+          : 'Your place is waiting.'}
+      </Text>
       <View style={styles.card}>
         <Text style={styles.label}>Type</Text>
         <Text style={styles.value}>{activity.activity_type}</Text>
@@ -544,5 +557,10 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#555',
+  },
+  teamHint: {
+  fontSize: 14,
+  color: '#475569',
+  marginTop: -4,
   },
 })
