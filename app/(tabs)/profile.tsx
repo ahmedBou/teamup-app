@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
@@ -16,6 +17,7 @@ export default function ProfileScreen() {
   const { session } = useAuth()
   const userId = session?.user?.id ?? null
   const email = session?.user?.email ?? null
+  const router = useRouter()
 
   const { profile, loading, error, updateProfile } = useProfile(userId, email)
 
@@ -74,7 +76,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Profile</Text>
-      <Text style={styles.subtitle}>Manage your public rider identity</Text>
+      <Text style={styles.subtitle}>Edit your rider profile</Text>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -102,7 +104,7 @@ export default function ProfileScreen() {
         <TextInput
           value={bio}
           onChangeText={setBio}
-          placeholder="Tell others a bit about you"
+          placeholder="Tell riders a bit about yourself"
           style={[styles.input, styles.textArea]}
           multiline
         />
@@ -160,8 +162,15 @@ export default function ProfileScreen() {
         style={[styles.saveButton, saving && styles.saveButtonDisabled]}
       >
         <Text style={styles.saveButtonText}>
-          {saving ? 'Saving...' : 'Save profile'}
+          {saving ? 'Saving...' : 'Save changes'}
         </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => router.push('/feedback')}
+        style={styles.feedbackButton}
+      >
+        <Text style={styles.feedbackButtonText}>Share feedback</Text>
       </Pressable>
     </ScrollView>
   )
@@ -258,6 +267,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0B1220',
+  },
+  feedbackButton: {
+    backgroundColor: '#0B1220',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  feedbackButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
   },
   errorText: {
     color: 'red',

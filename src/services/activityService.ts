@@ -1,6 +1,12 @@
 import { supabase } from '../lib/supabase'
 import type { Activity, CreateActivityInput } from '../types/activity'
 
+function sortActivitiesByStartTime(items: Activity[]): Activity[] {
+  return [...items].sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  )
+}
+
 export const activityService = {
   async listUpcomingActivities(): Promise<Activity[]> {
     const now = new Date().toISOString()
@@ -68,20 +74,62 @@ export const activityService = {
     return data as Activity | null
   },
 
+  async listHostedActivities(userId: string): Promise<Activity[]> {
+    const { data, error } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('host_id', userId)
+      .order('start_time', { ascending: true })
+
+    if (error) {
+      throw error
+    }
+
+    return (data ?? []) as Activity[]
+  },
+
+  async listJoinedActivities(userId: string): Promise<Activity[]> {
+    const { data: participantRows, error: participantError } = await supabase
+      .from('activity_participants')
+      .select('activity_id')
+      .eq('user_id', userId)
+
+    if (participantError) {
+      throw participantError
+    }
+
+    const activityIds = (participantRows ?? []).map((row: any) => row.activity_id)
+
+    if (activityIds.length === 0) {
+      return []
+    }
+
+    const { data, error } = await supabase
+      .from('activities')
+      .select('*')
+      .in('id', activityIds)
+
+    if (error) {
+      throw error
+    }
+
+    return sortActivitiesByStartTime((data ?? []) as Activity[])
+  },
+
   async updateActivityStatus(
     activityId: string,
     status: 'open' | 'full' | 'cancelled'
-    ): Promise<void> {
-      const { error } = await supabase
-        .from('activities')
-        .update({ status })
-        .eq('id', activityId)
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('activities')
+      .update({ status })
+      .eq('id', activityId)
 
-      if (error) {
-        throw error
-      }
+    if (error) {
+      throw error
+    }
   },
-  
+
   async cancelActivity(activityId: string): Promise<void> {
     const { error } = await supabase
       .from('activities')
@@ -91,6 +139,5 @@ export const activityService = {
     if (error) {
       throw error
     }
-  }
-
+  },
 }

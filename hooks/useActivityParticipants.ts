@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
-import { participantService, type ActivityParticipant } from '../src/services/participantService'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  participantService,
+  type ActivityParticipant,
+} from '../src/services/participantService'
 
 type UseActivityParticipantsResult = {
   participants: ActivityParticipant[]
@@ -23,6 +26,8 @@ export function useActivityParticipants(
   const refreshParticipants = useCallback(async () => {
     if (!activityId) {
       setParticipants([])
+      setError(null)
+      setLoading(false)
       return
     }
 
@@ -49,6 +54,7 @@ export function useActivityParticipants(
       setError(null)
 
       await participantService.joinActivity(activityId, userId)
+
       const data = await participantService.listParticipants(activityId)
       setParticipants(data)
     } catch (err: any) {
@@ -69,6 +75,7 @@ export function useActivityParticipants(
       setError(null)
 
       await participantService.leaveActivity(activityId, userId)
+
       const data = await participantService.listParticipants(activityId)
       setParticipants(data)
     } catch (err: any) {
@@ -80,11 +87,14 @@ export function useActivityParticipants(
   }, [activityId, userId])
 
   useEffect(() => {
-    refreshParticipants()
+    void refreshParticipants()
   }, [refreshParticipants])
 
   const participantCount = participants.length
-  const isJoined = !!userId && participants.some((p) => p.user_id === userId)
+
+  const isJoined = useMemo(() => {
+    return !!userId && participants.some((p) => p.user_id === userId)
+  }, [participants, userId])
 
   return {
     participants,
