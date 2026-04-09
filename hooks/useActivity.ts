@@ -17,6 +17,8 @@ export function useActivity(activityId?: string | null): UseActivityResult {
   const refreshActivity = useCallback(async () => {
     if (!activityId) {
       setActivity(null)
+      setError(null)
+      setLoading(false)
       return
     }
 
@@ -34,7 +36,7 @@ export function useActivity(activityId?: string | null): UseActivityResult {
   }, [activityId])
 
   useEffect(() => {
-    refreshActivity()
+    void refreshActivity()
   }, [refreshActivity])
 
   return {
