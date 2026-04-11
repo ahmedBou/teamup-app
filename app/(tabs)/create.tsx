@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
+import { useCircuits } from '../../hooks/useCircuits'
 import { activityService } from '../../src/services/activityService'
 import type { ActivityType } from '../../src/types/activity'
 
@@ -35,6 +36,7 @@ function buildIsoDateTime(date: string, time: string) {
 export default function CreateActivityScreen() {
   const router = useRouter()
   const { session } = useAuth()
+  const { circuits, loading: circuitsLoading, error: circuitsError } = useCircuits()
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -43,6 +45,7 @@ export default function CreateActivityScreen() {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [maxParticipants, setMaxParticipants] = useState('6')
+  const [selectedCircuitId, setSelectedCircuitId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const handleCreate = async () => {
@@ -70,6 +73,11 @@ export default function CreateActivityScreen() {
 
     if (!time.trim()) {
       Alert.alert('Missing info', 'Please enter a time')
+      return
+    }
+
+    if (!selectedCircuitId) {
+      Alert.alert('Circuit required', 'Please choose a circuit before creating the ride.')
       return
     }
 
@@ -103,6 +111,7 @@ export default function CreateActivityScreen() {
         city: city.trim(),
         start_time: startTimeIso,
         max_participants: parsedMax,
+        circuit_id: selectedCircuitId,
       })
 
       Alert.alert('Success', 'Activity created successfully')
@@ -207,6 +216,43 @@ export default function CreateActivityScreen() {
         />
       </View>
 
+      <View style={styles.section}>
+        <Text style={styles.label}>Choose a circuit</Text>
+
+        {circuitsLoading ? (
+          <Text style={styles.helperText}>Loading circuits...</Text>
+        ) : circuitsError ? (
+          <Text style={styles.errorText}>{circuitsError}</Text>
+        ) : circuits.length === 0 ? (
+          <Text style={styles.helperText}>No active circuits available yet.</Text>
+        ) : (
+          <View style={styles.circuitList}>
+            {circuits.map((circuit) => {
+              const selected = selectedCircuitId === circuit.id
+
+              return (
+                <Pressable
+                  key={circuit.id}
+                  onPress={() => setSelectedCircuitId(circuit.id)}
+                  style={[
+                    styles.circuitCard,
+                    selected && styles.circuitCardSelected,
+                  ]}
+                >
+                  <Text style={styles.circuitName}>{circuit.name}</Text>
+                  <Text style={styles.circuitMeta}>
+                    {circuit.city} · {circuit.difficulty} · {circuit.distance_km} km
+                  </Text>
+                  <Text style={styles.circuitMeta}>
+                    ~ {circuit.duration_min} min
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        )}
+      </View>
+
       <Pressable
         onPress={handleCreate}
         disabled={saving}
@@ -290,6 +336,31 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: '#fff',
   },
+  circuitList: {
+    gap: 12,
+    marginTop: 4,
+  },
+  circuitCard: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: '#fafafa',
+  },
+  circuitCardSelected: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  circuitName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  circuitMeta: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#64748b',
+  },
   saveButton: {
     marginTop: 10,
     backgroundColor: '#22c55e',
@@ -304,5 +375,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0B1220',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 14,
   },
 })

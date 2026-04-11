@@ -17,7 +17,21 @@ export const activityService = {
 
     const { data, error } = await supabase
       .from('activities')
-      .select('*')
+      .select(`
+        *,
+        circuit:circuits (
+          id,
+          name,
+          city,
+          difficulty,
+          distance_km,
+          duration_min,
+          geojson,
+          cover_image_url,
+          is_active,
+          created_at
+        )
+      `)
       .gte('start_time', now)
       .in('status', ['open', 'full'])
       .order('start_time', { ascending: true })
@@ -69,6 +83,7 @@ export const activityService = {
         city: input.city,
         start_time: input.start_time,
         max_participants: input.max_participants,
+        circuit_id: input.circuit_id ?? null,
       })
       .select()
       .single()
@@ -99,7 +114,21 @@ export const activityService = {
   async getActivityById(activityId: string): Promise<Activity | null> {
     const { data, error } = await supabase
       .from('activities')
-      .select('*')
+      .select(`
+        *,
+        circuit:circuits (
+          id,
+          name,
+          city,
+          difficulty,
+          distance_km,
+          duration_min,
+          geojson,
+          cover_image_url,
+          is_active,
+          created_at
+        )
+      `)
       .eq('id', activityId)
       .maybeSingle()
 

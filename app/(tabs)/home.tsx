@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router'
 import { useCallback } from 'react'
 import {
   ActivityIndicator,
+  ImageBackground,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -67,7 +68,6 @@ export default function HomeScreen() {
         >
           <View style={styles.secondaryButtonInner}>
             <Text style={styles.secondaryButtonText}>Messages</Text>
-
             {unreadCount > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
@@ -104,57 +104,68 @@ export default function HomeScreen() {
             activity.max_participants
           )
 
+          const imageUrl =
+            activity.circuit?.cover_image_url ||
+            'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80'
+
           return (
             <Pressable
               key={activity.id}
               style={styles.card}
               onPress={() => router.push(`/activity/${activity.id}`)}
             >
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{activity.title}</Text>
+              <ImageBackground
+                source={{ uri: imageUrl }}
+                style={styles.cardImage}
+                imageStyle={styles.cardImageInner}
+              >
+                <View style={styles.overlay}>
+                  <View style={styles.cardTopRow}>
+                    <View style={styles.headerPill}>
+                      <Text style={styles.headerPillText}>{activity.activity_type}</Text>
+                    </View>
 
-                <View
-                  style={[
-                    styles.statusBadge,
-                    cardStatus === 'Cancelled'
-                      ? styles.statusBadgeCancelled
-                      : cardStatus === 'Full'
-                      ? styles.statusBadgeFull
-                      : cardStatus === 'Completed'
-                      ? styles.statusBadgeCompleted
-                      : styles.statusBadgeOpen,
-                  ]}
-                >
-                  <Text style={styles.statusBadgeText}>{cardStatus}</Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        cardStatus === 'Cancelled'
+                          ? styles.statusBadgeCancelled
+                          : cardStatus === 'Full'
+                          ? styles.statusBadgeFull
+                          : cardStatus === 'Completed'
+                          ? styles.statusBadgeCompleted
+                          : styles.statusBadgeOpen,
+                      ]}
+                    >
+                      <Text style={styles.statusBadgeText}>{cardStatus}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardBottomContent}>
+                    <Text style={styles.cardTitle}>{activity.title}</Text>
+                    <Text style={styles.cardMeta}>
+                      {activity.city} · {formatDate(activity.start_time)}
+                    </Text>
+
+                    {activity.circuit ? (
+                      <Text style={styles.cardMetaSecondary}>
+                        {activity.circuit.name} · {activity.circuit.difficulty} ·{' '}
+                        {activity.circuit.distance_km} km
+                      </Text>
+                    ) : null}
+
+                    <View style={styles.previewCard}>
+                      <PuzzlePreview
+                        participantCount={participantCount}
+                        maxParticipants={activity.max_participants}
+                        status={activity.status}
+                      />
+                    </View>
+
+                    <Text style={styles.openHint}>View ride details</Text>
+                  </View>
                 </View>
-              </View>
-
-              <Text style={styles.label}>Type</Text>
-              <Text style={styles.value}>{activity.activity_type}</Text>
-
-              <Text style={styles.label}>City</Text>
-              <Text style={styles.value}>{activity.city}</Text>
-
-              <Text style={styles.label}>Start time</Text>
-              <Text style={styles.value}>{formatDate(activity.start_time)}</Text>
-
-              <Text style={styles.label}>Max participants</Text>
-              <Text style={styles.value}>{activity.max_participants}</Text>
-
-              <PuzzlePreview
-                participantCount={participantCount}
-                maxParticipants={activity.max_participants}
-                status={activity.status}
-              />
-
-              {activity.description ? (
-                <>
-                  <Text style={styles.label}>Description</Text>
-                  <Text style={styles.value}>{activity.description}</Text>
-                </>
-              ) : null}
-
-              <Text style={styles.openHint}>View ride details</Text>
+              </ImageBackground>
             </Pressable>
           )
         })
@@ -253,24 +264,39 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   card: {
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 16,
-    padding: 18,
-    gap: 8,
-    backgroundColor: '#fafafa',
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#e5e7eb',
   },
-  cardHeader: {
+  cardImage: {
+    minHeight: 320,
+    justifyContent: 'space-between',
+  },
+  cardImageInner: {
+    borderRadius: 22,
+  },
+  overlay: {
+    flex: 1,
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+  },
+  cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 12,
   },
-  cardTitle: {
-    flex: 1,
-    fontSize: 20,
+  headerPill: {
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  headerPillText: {
+    fontSize: 12,
     fontWeight: '700',
-    marginBottom: 4,
+    color: '#111827',
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -294,20 +320,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#555',
-    marginTop: 6,
+  cardBottomContent: {
+    gap: 8,
   },
-  value: {
-    fontSize: 16,
-    color: '#111',
+  cardTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  cardMeta: {
+    fontSize: 14,
+    color: '#f8fafc',
+    fontWeight: '600',
+  },
+  cardMetaSecondary: {
+    fontSize: 13,
+    color: '#e2e8f0',
+  },
+  previewCard: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
   openHint: {
-    marginTop: 10,
+    marginTop: 4,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#2563eb',
+    fontWeight: '700',
+    color: '#fff',
   },
 })

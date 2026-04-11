@@ -42,12 +42,7 @@ export default function ActivityDetailsScreen() {
   const { session } = useAuth()
   const userId = session?.user?.id ?? null
 
-  const {
-    activity,
-    loading,
-    error,
-    refreshActivity,
-  } = useActivity(activityId)
+  const { activity, loading, error, refreshActivity } = useActivity(activityId)
 
   const {
     loading: participantsLoading,
@@ -205,26 +200,22 @@ export default function ActivityDetailsScreen() {
       return
     }
 
-    Alert.alert(
-      'Cancel ride',
-      'Are you sure you want to cancel this ride?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, cancel',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await activityService.cancelActivity(activity.id)
-              await refreshActivity()
-              Alert.alert('Cancelled', 'This ride has been cancelled.')
-            } catch (err: any) {
-              Alert.alert('Cancel failed', err?.message ?? 'Unknown error')
-            }
-          },
+    Alert.alert('Cancel ride', 'Are you sure you want to cancel this ride?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Yes, cancel',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await activityService.cancelActivity(activity.id)
+            await refreshActivity()
+            Alert.alert('Cancelled', 'This ride has been cancelled.')
+          } catch (err: any) {
+            Alert.alert('Cancel failed', err?.message ?? 'Unknown error')
+          }
         },
-      ]
-    )
+      },
+    ])
   }
 
   const handleOpenChat = () => {
@@ -247,12 +238,12 @@ export default function ActivityDetailsScreen() {
   const joinButtonLabel = isCancelled
     ? 'Ride cancelled'
     : isCompleted
-    ? 'Ride completed'
-    : isJoined
-    ? 'You joined this ride'
-    : isFull
-    ? 'Ride is full'
-    : 'Join ride'
+      ? 'Ride completed'
+      : isJoined
+        ? 'You joined this ride'
+        : isFull
+          ? 'Ride is full'
+          : 'Join ride'
 
   const openChatLabel = canOpenChat ? 'Open chat' : 'Join ride to access chat'
 
@@ -284,16 +275,17 @@ export default function ActivityDetailsScreen() {
         partialText={`${participantCount} / ${activity.max_participants} spots filled`}
         fullText="Team complete"
       />
-        {/* Microcopy  */}
+
       <Text style={styles.teamHint}>
         {isFull
           ? 'This ride is complete.'
           : isHost
-          ? 'You started this team.'
-          : isJoined
-          ? 'You are part of this team.'
-          : 'Your place is waiting.'}
+            ? 'You started this team.'
+            : isJoined
+              ? 'You are part of this team.'
+              : 'Your place is waiting.'}
       </Text>
+
       <View style={styles.card}>
         <Text style={styles.label}>Type</Text>
         <Text style={styles.value}>{activity.activity_type}</Text>
@@ -311,8 +303,35 @@ export default function ActivityDetailsScreen() {
 
         <Text style={styles.label}>Status</Text>
         <Text style={styles.value}>
-          {getDisplayStatus(activity.status, participantCount, activity.max_participants)}
+          {getDisplayStatus(
+            activity.status,
+            participantCount,
+            activity.max_participants
+          )}
         </Text>
+
+        <Text style={styles.label}>Circuit</Text>
+        {activity.circuit ? (
+          <View style={styles.circuitCard}>
+            {activity.circuit.cover_image_url ? (
+              <Image
+                source={{ uri: activity.circuit.cover_image_url }}
+                style={styles.circuitImage}
+                resizeMode="cover"
+              />
+            ) : null}
+
+            <Text style={styles.circuitTitle}>{activity.circuit.name}</Text>
+            <Text style={styles.circuitMeta}>
+              {activity.circuit.city} · {activity.circuit.difficulty}
+            </Text>
+            <Text style={styles.circuitMeta}>
+              {activity.circuit.distance_km} km · ~ {activity.circuit.duration_min} min
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.value}>No circuit selected</Text>
+        )}
 
         <Text style={styles.label}>Description</Text>
         <Text style={styles.value}>{activity.description ?? '—'}</Text>
@@ -559,8 +578,33 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   teamHint: {
-  fontSize: 14,
-  color: '#475569',
-  marginTop: -4,
+    fontSize: 14,
+    color: '#475569',
+    marginTop: -4,
+  },
+  circuitCard: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: '#f8fafc',
+  },
+  circuitImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: '#e5e7eb',
+  },
+  circuitTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  circuitMeta: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#64748b',
   },
 })

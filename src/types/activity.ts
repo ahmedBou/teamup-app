@@ -1,3 +1,5 @@
+import type { Circuit } from './circuit'
+
 export type ActivityType =
   | 'road_ride'
   | 'mtb_ride'
@@ -16,6 +18,8 @@ export type Activity = {
   start_time: string
   max_participants: number
   participant_count: number
+  circuit_id: string | null
+  circuit?: Circuit | null
   status: ActivityStatus
   created_at: string
   updated_at: string
@@ -29,4 +33,5 @@ export type CreateActivityInput = {
   city: string
   start_time: string
   max_participants: number
+  circuit_id?: string | null
 }
