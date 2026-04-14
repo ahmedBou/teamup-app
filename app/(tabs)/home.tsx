@@ -1,22 +1,41 @@
 import { useFocusEffect } from '@react-navigation/native'
 import { useRouter } from 'expo-router'
-import { useCallback } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import {
   ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
   ImageBackground,
+  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
-import PuzzlePreview from '../../components/puzzle/PuzzlePreview'
+import HomeRidePuzzleOverlay from '../../components/puzzle/HomeRidePuzzleOverlay'
 import { useActivities } from '../../hooks/useActivities'
-import { useNotifications } from '../../hooks/useNotifications'
+import { useActivityParticipantPreviews } from '../../hooks/useActivityParticipantPreviews'
+import { useAuth } from '../../hooks/useAuth'
+import { participantService } from '../../src/services/participantService'
+import type { Activity } from '../../src/types/activity'
 
-function formatDate(dateString: string) {
+const { width, height } = Dimensions.get('window')
+const CARD_WIDTH = width
+const CARD_HEIGHT = Platform.OS === 'web' ? height - 70 : height - 110
+
+function formatRideDate(dateString: string) {
   const date = new Date(dateString)
-  return date.toLocaleString()
+
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'long' })
+  const month = date.toLocaleDateString('en-US', { month: 'long' })
+  const day = date.getDate()
+  const time = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+
+  return `${weekday}, ${month} ${day} · ${time}`
 }
 
 function getCardStatus(
@@ -32,14 +51,187 @@ function getCardStatus(
 
 export default function HomeScreen() {
   const router = useRouter()
+  const listRef = useRef<FlatList<Activity>>(null)
+
+  const { session } = useAuth()
+  const userId = session?.user?.id ?? null
+
   const { activities, loading, error, refreshActivities } = useActivities()
-  const { unreadCount } = useNotifications()
+  const activityIds = useMemo(
+    () => activities.map((activity) => activity.id),
+    [activities]
+  )
+
+  const {
+    previewsByActivityId,
+    refresh: refreshParticipantPreviews,
+  } = useActivityParticipantPreviews(activityIds)
 
   useFocusEffect(
     useCallback(() => {
       void refreshActivities()
     }, [refreshActivities])
   )
+
+
+  const handleJoinFromHome = async (activity: Activity) => {
+    if (!userId) {
+      Alert.alert('Login required', 'You must be logged in to join a ride.')
+      return
+    }
+
+    const participantCount = activity.participant_count ?? 0
+    const cardStatus = getCardStatus(
+      activity.status,
+      participantCount,
+      activity.max_participants
+    )
+
+    if (cardStatus === 'Cancelled') {
+      Alert.alert('Ride cancelled', 'This ride has been cancelled.')
+      return
+    }
+
+    if (cardStatus === 'Completed') {
+      Alert.alert('Ride completed', 'This ride is already completed.')
+      return
+    }
+
+    if (cardStatus === 'Full') {
+      Alert.alert('Ride is full', 'This ride has reached max riders.')
+      return
+    }
+
+    try {
+      await participantService.joinActivity(activity.id, userId)
+      await refreshActivities()
+      router.push(`/activity/${activity.id}`)
+    } catch (err: any) {
+      Alert.alert('Join failed', err?.message ?? 'Unknown error')
+    }
+  }
+
+  const handleSkip = (index: number) => {
+    const nextIndex = index + 1
+    if (nextIndex >= activities.length) return
+
+    listRef.current?.scrollToIndex({
+      index: nextIndex,
+      animated: true,
+      viewPosition: 0,
+    })
+  }
+
+  const renderRideCard = ({
+    item: activity,
+    index,
+  }: {
+    item: Activity
+    index: number
+  }) => {
+    const participantCount = activity.participant_count ?? 0
+    const cardStatus = getCardStatus(
+      activity.status,
+      participantCount,
+      activity.max_participants
+    )
+
+    const imageUrl =
+      activity.circuit?.cover_image_url ||
+      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80'
+
+    const circuitSummary = activity.circuit
+      ? `${activity.circuit.name} · ${activity.circuit.difficulty} · ${activity.circuit.distance_km} km`
+      : activity.city
+
+    return (
+      <View style={styles.card}>
+        <ImageBackground
+          source={{ uri: imageUrl }}
+          style={styles.cardImage}
+          imageStyle={styles.cardImageInner}
+          resizeMode="cover"
+        >
+          <View style={styles.overlay}>
+            <View style={styles.topHeader}>
+              <Pressable
+                style={styles.headerLeft}
+                onPress={() => router.push(`/activity/${activity.id}`)}
+              >
+                <Text style={styles.cardTitle}>{activity.title}</Text>
+                <Text style={styles.cardCircuit}>{circuitSummary}</Text>
+                <Text style={styles.cardTime}>
+                  {formatRideDate(activity.start_time)}
+                </Text>
+              </Pressable>
+
+              <View style={styles.headerRight}>
+                <View style={styles.typeBadge}>
+                  <Text style={styles.typeBadgeText}>{activity.activity_type}</Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.statusBadge,
+                    cardStatus === 'Cancelled'
+                      ? styles.statusBadgeCancelled
+                      : cardStatus === 'Full'
+                        ? styles.statusBadgeFull
+                        : cardStatus === 'Completed'
+                          ? styles.statusBadgeCompleted
+                          : styles.statusBadgeOpen,
+                  ]}
+                >
+                  <Text style={styles.statusBadgeText}>{cardStatus}</Text>
+                </View>
+
+                <Text style={styles.spotsText}>
+                  {participantCount} / {activity.max_participants} spots filled
+                </Text>
+              </View>
+            </View>
+
+           <HomeRidePuzzleOverlay
+              participants={(previewsByActivityId[activity.id] ?? []).map((item) => ({
+                id: item.userId,
+                name: item.firstName,
+                avatarUrl: item.avatarUrl,
+                city: item.city,
+                cyclingLevel: null,
+                ridingStyle: null,
+                bio: null,
+                reviews: [
+                  {
+                    id: `review-${item.userId}-1`,
+                    authorName: 'Parea rider',
+                    rating: 5,
+                    comment: 'Friendly rider and easy to coordinate with.',
+                  },
+                ],
+              }))}
+              maxParticipants={activity.max_participants}
+            />
+
+            <View style={styles.bottomActions}>
+              <Pressable
+                onPress={() => void handleJoinFromHome(activity)}
+                style={[styles.actionButton, styles.joinButton]}
+              >
+                <Text style={styles.joinText}>Join</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleSkip(index)}
+                style={[styles.actionButton, styles.skipButton]}
+              >
+                <Text style={styles.skipText}>Skip</Text>
+              </Pressable>
+            </View>
+          </View>
+        </ImageBackground>
+      </View>
+    )
+  }
 
   if (loading) {
     return (
@@ -49,128 +241,40 @@ export default function HomeScreen() {
     )
   }
 
+  if (activities.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.emptyText}>
+          {error ?? 'No rides available yet.'}
+        </Text>
+      </View>
+    )
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Find rides</Text>
-      <Text style={styles.subtitle}>Join local cycling groups around you.</Text>
-
-      <View style={styles.actionRow}>
-        <Pressable
-          style={styles.refreshButton}
-          onPress={() => void refreshActivities()}
-        >
-          <Text style={styles.refreshButtonText}>Refresh</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => router.push('/notifications')}
-        >
-          <View style={styles.secondaryButtonInner}>
-            <Text style={styles.secondaryButtonText}>Messages</Text>
-            {unreadCount > 0 ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        </Pressable>
-
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => router.push('/my-activities')}
-        >
-          <Text style={styles.secondaryButtonText}>My rides</Text>
-        </Pressable>
+    <View style={styles.screen}>
+      <View style={styles.brandHeader}>
+        <Text style={styles.brandName}>Parea</Text>
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      {activities.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>No rides yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Be the first to create a ride in your area.
-          </Text>
-        </View>
-      ) : (
-        activities.map((activity) => {
-          const participantCount = activity.participant_count ?? 0
-          const cardStatus = getCardStatus(
-            activity.status,
-            participantCount,
-            activity.max_participants
-          )
-
-          const imageUrl =
-            activity.circuit?.cover_image_url ||
-            'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80'
-
-          return (
-            <Pressable
-              key={activity.id}
-              style={styles.card}
-              onPress={() => router.push(`/activity/${activity.id}`)}
-            >
-              <ImageBackground
-                source={{ uri: imageUrl }}
-                style={styles.cardImage}
-                imageStyle={styles.cardImageInner}
-              >
-                <View style={styles.overlay}>
-                  <View style={styles.cardTopRow}>
-                    <View style={styles.headerPill}>
-                      <Text style={styles.headerPillText}>{activity.activity_type}</Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        cardStatus === 'Cancelled'
-                          ? styles.statusBadgeCancelled
-                          : cardStatus === 'Full'
-                          ? styles.statusBadgeFull
-                          : cardStatus === 'Completed'
-                          ? styles.statusBadgeCompleted
-                          : styles.statusBadgeOpen,
-                      ]}
-                    >
-                      <Text style={styles.statusBadgeText}>{cardStatus}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardBottomContent}>
-                    <Text style={styles.cardTitle}>{activity.title}</Text>
-                    <Text style={styles.cardMeta}>
-                      {activity.city} · {formatDate(activity.start_time)}
-                    </Text>
-
-                    {activity.circuit ? (
-                      <Text style={styles.cardMetaSecondary}>
-                        {activity.circuit.name} · {activity.circuit.difficulty} ·{' '}
-                        {activity.circuit.distance_km} km
-                      </Text>
-                    ) : null}
-
-                    <View style={styles.previewCard}>
-                      <PuzzlePreview
-                        participantCount={participantCount}
-                        maxParticipants={activity.max_participants}
-                        status={activity.status}
-                      />
-                    </View>
-
-                    <Text style={styles.openHint}>View ride details</Text>
-                  </View>
-                </View>
-              </ImageBackground>
-            </Pressable>
-          )
-        })
-      )}
-    </ScrollView>
+      <FlatList
+        ref={listRef}
+        data={activities}
+        keyExtractor={(item) => item.id}
+        renderItem={renderRideCard}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={CARD_WIDTH}
+        decelerationRate="fast"
+        contentContainerStyle={{ paddingBottom: 0 }}
+        getItemLayout={(_, index) => ({
+          length: CARD_WIDTH,
+          offset: CARD_WIDTH * index,
+          index,
+        })}
+      />
+    </View>
   )
 }
 
@@ -179,128 +283,95 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  container: {
-    padding: 24,
-    paddingBottom: 40,
-    gap: 16,
     backgroundColor: '#fff',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 20,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  refreshButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#0B1220',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  refreshButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  secondaryButtonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  secondaryButtonText: {
+  emptyText: {
     color: '#111827',
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  badge: {
-    minWidth: 22,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: '#ef4444',
-    alignItems: 'center',
+  screen: {
+    flex: 1,
+    backgroundColor: '#fff',
   },
-  badgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
+  brandHeader: {
+    paddingTop: 6,
+    paddingBottom: 4,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
   },
-  errorText: {
-    color: 'red',
-    fontSize: 14,
-  },
-  emptyCard: {
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 16,
-    padding: 20,
-    backgroundColor: '#fafafa',
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  emptySubtitle: {
-    marginTop: 8,
-    fontSize: 15,
-    color: '#666',
-    lineHeight: 22,
+  brandName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -0.6,
   },
   card: {
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: '#e5e7eb',
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
   },
   cardImage: {
-    minHeight: 320,
-    justifyContent: 'space-between',
+    flex: 1,
   },
   cardImageInner: {
-    borderRadius: 22,
+    width: '100%',
+    height: '100%',
   },
   overlay: {
     flex: 1,
     justifyContent: 'space-between',
-    padding: 16,
+    paddingTop: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
     backgroundColor: 'rgba(15, 23, 42, 0.28)',
   },
-  cardTopRow: {
+  topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.20)',
   },
-  headerPill: {
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  headerLeft: {
+    flex: 1,
+    gap: 4,
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  cardTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  cardCircuit: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#f8fafc',
+  },
+  cardTime: {
+    fontSize: 13,
+    color: '#f1f5f9',
+    fontWeight: '600',
+  },
+  typeBadge: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 999,
   },
-  headerPillText: {
+  typeBadgeText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#111827',
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 999,
   },
   statusBadgeOpen: {
@@ -310,7 +381,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fee2e2',
   },
   statusBadgeCancelled: {
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#e5e5e5',
   },
   statusBadgeCompleted: {
     backgroundColor: '#dbeafe',
@@ -320,33 +391,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
   },
-  cardBottomContent: {
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#fff',
-  },
-  cardMeta: {
-    fontSize: 14,
-    color: '#f8fafc',
-    fontWeight: '600',
-  },
-  cardMetaSecondary: {
-    fontSize: 13,
-    color: '#e2e8f0',
-  },
-  previewCard: {
-    marginTop: 8,
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-  },
-  openHint: {
-    marginTop: 4,
-    fontSize: 14,
+  spotsText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#fff',
+    color: '#f8fafc',
+    textAlign: 'right',
+  },
+  bottomActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(8, 15, 28, 0.82)',
+    marginBottom: 18,
+    alignSelf: 'center',
+    width: '92%',
+  },
+  actionButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  joinButton: {
+    backgroundColor: '#22c55e',
+  },
+  skipButton: {
+    backgroundColor: '#ffffff',
+  },
+  joinText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#08101c',
+  },
+  skipText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
   },
 })

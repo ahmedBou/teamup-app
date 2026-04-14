@@ -2,17 +2,17 @@ import { useFocusEffect } from '@react-navigation/native'
 import { Redirect, useRouter } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
 import {
-    ActivityIndicator,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native'
-import { useAuth } from '../hooks/useAuth'
-import { useMyActivities } from '../hooks/useMyActivities'
-import type { Activity } from '../src/types/activity'
+import { useAuth } from '../../hooks/useAuth'
+import { useMyActivities } from '../../hooks/useMyActivities'
+import type { Activity } from '../../src/types/activity'
 
 type MyActivitiesTab = 'created' | 'joined'
 
@@ -34,7 +34,12 @@ function ActivityCard({
     <Pressable style={styles.card} onPress={onPress}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>{activity.title}</Text>
-        <View style={[styles.roleBadge, role === 'host' ? styles.hostBadge : styles.participantBadge]}>
+        <View
+          style={[
+            styles.roleBadge,
+            role === 'host' ? styles.hostBadge : styles.participantBadge,
+          ]}
+        >
           <Text style={styles.roleBadgeText}>
             {role === 'host' ? 'Hosting' : 'Joined'}
           </Text>

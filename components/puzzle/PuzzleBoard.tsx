@@ -1,22 +1,35 @@
-import { Image, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import RiderProfileModal from '../profile/RiderProfileModal'
 
-// --- TYPES (Lesson 4 — TypeScript contracts)
-type PuzzleSlot = {
+export type RiderReview = {
   id: string
-  name: string | null      // string | null = might not exist yet
-  avatarUrl: string | null // same
+  authorName: string
+  rating: number
+  comment: string
+}
+
+export type PuzzleSlot = {
+  id: string
+  name: string | null
+  avatarUrl: string | null
+  city?: string | null
+  cyclingLevel?: string | null
+  ridingStyle?: string | null
+  bio?: string | null
+  reviews?: RiderReview[]
 }
 
 type PuzzleBoardProps = {
   participants: PuzzleSlot[]
   maxParticipants: number
-  title?: string           // ? = optional prop
+  title?: string
   emptyText?: string
   partialText?: string
   fullText?: string
+  activityId?: string | null
 }
 
-// --- HELPER (pure function, no React)
 function getInitials(name: string | null): string {
   if (!name?.trim()) return '?'
   const parts = name.trim().split(' ')
@@ -24,7 +37,6 @@ function getInitials(name: string | null): string {
   return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase()
 }
 
-// --- COMPONENT
 export default function PuzzleBoard({
   participants,
   maxParticipants,
@@ -32,74 +44,81 @@ export default function PuzzleBoard({
   emptyText = 'No riders yet',
   partialText,
   fullText = 'Team complete',
+  activityId = null,
 }: PuzzleBoardProps) {
+  const [selectedRider, setSelectedRider] = useState<PuzzleSlot | null>(null)
 
-  // Build exactly maxParticipants slots (Lesson 1 — structured memory)
   const slots = Array.from({ length: maxParticipants }, (_, index) => ({
     key: String(index),
     participant: participants[index] ?? null,
   }))
 
-  // State calculation (Lesson 4 — union logic)
   const filledCount = Math.min(participants.length, maxParticipants)
   const isEmpty = filledCount === 0
   const isFull = filledCount === maxParticipants
-  const progressPercent = maxParticipants > 0 
-    ? (filledCount / maxParticipants) * 100 
-    : 0
+  const progressPercent =
+    maxParticipants > 0 ? (filledCount / maxParticipants) * 100 : 0
 
   const statusText = isEmpty
     ? emptyText
     : isFull
-    ? fullText
-    : partialText ?? `${filledCount} / ${maxParticipants} spots filled`
+      ? fullText
+      : partialText ?? `${filledCount} / ${maxParticipants} spots filled`
 
   return (
-    <View style={styles.wrapper}>
+    <>
+      <View style={styles.wrapper}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.status}>{statusText}</Text>
+        </View>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.status}>{statusText}</Text>
-      </View>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+        </View>
 
-      {/* Progress bar — visual of fill rate */}
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-      </View>
-
-      {/* Slots grid */}
-      <View style={styles.grid}>
-        {slots.map((slot, index) => (
-          <View key={slot.key} style={styles.slot}>
-            {slot.participant ? (
-              // Filled slot
-              slot.participant.avatarUrl ? (
-                // Has avatar photo
-                <Image
-                  source={{ uri: slot.participant.avatarUrl }}
-                  style={[styles.avatar, styles.avatarImage]}
-                />
+        <View style={styles.grid}>
+          {slots.map((slot, index) => (
+            <View key={slot.key} style={styles.slot}>
+              {slot.participant ? (
+                <Pressable
+                  onPress={() => {
+                    console.log('avatar clicked', slot.participant?.name)
+                    setSelectedRider(slot.participant)
+                  }}
+                  style={styles.avatarPressable}
+                >
+                  {slot.participant.avatarUrl ? (
+                    <Image
+                      source={{ uri: slot.participant.avatarUrl }}
+                      style={[styles.avatar, styles.avatarImage]}
+                    />
+                  ) : (
+                    <View style={[styles.avatar, styles.avatarFilled]}>
+                      <Text style={styles.initials}>
+                        {getInitials(slot.participant.name)}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
               ) : (
-                // No photo — show initials
-                <View style={[styles.avatar, styles.avatarFilled]}>
-                  <Text style={styles.initials}>
-                    {getInitials(slot.participant.name)}
-                  </Text>
+                <View style={[styles.avatar, styles.avatarEmpty]}>
+                  <Text style={styles.emptyPlus}>+</Text>
                 </View>
-              )
-            ) : (
-              // Empty slot
-              <View style={[styles.avatar, styles.avatarEmpty]}>
-                <Text style={styles.emptyPlus}>+</Text>
-              </View>
-            )}
-            <Text style={styles.slotNumber}>{index + 1}</Text>
-          </View>
-        ))}
+              )}
+              <Text style={styles.slotNumber}>{index + 1}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
-    </View>
+      <RiderProfileModal
+        rider={selectedRider}
+        visible={!!selectedRider}
+        onClose={() => setSelectedRider(null)}
+        activityId={activityId}
+      />
+    </>
   )
 }
 
@@ -112,9 +131,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
     gap: 14,
   },
-  header: { gap: 4 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  status: { fontSize: 14, color: '#64748b', fontWeight: '500' },
+  header: {
+    gap: 4,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  status: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '600',
+  },
   progressTrack: {
     width: '100%',
     height: 8,
@@ -127,25 +156,50 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#22c55e',
   },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  slot: { width: 64, alignItems: 'center', gap: 4 },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  slot: {
+    width: 64,
+    alignItems: 'center',
+    gap: 6,
+  },
+  avatarPressable: {
+    borderRadius: 18,
+  },
   avatar: {
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
   avatarImage: {},
-  avatarFilled: { backgroundColor: '#0B1220' },
+  avatarFilled: {
+    backgroundColor: '#0B1220',
+  },
   avatarEmpty: {
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: '#cbd5e1',
     backgroundColor: '#fff',
   },
-  initials: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  emptyPlus: { color: '#94a3b8', fontSize: 24, fontWeight: '700' },
-  slotNumber: { fontSize: 11, color: '#94a3b8', fontWeight: '600' },
+  initials: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  emptyPlus: {
+    color: '#94a3b8',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  slotNumber: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '700',
+  },
 })

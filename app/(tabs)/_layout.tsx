@@ -1,54 +1,87 @@
-import { Redirect, Tabs } from 'expo-router'
-import { ActivityIndicator, View } from 'react-native'
-import { useAuth } from '../../hooks/useAuth'
-import { useNotifications } from '../../hooks/useNotifications'
+import { Ionicons } from '@expo/vector-icons'
+import { Tabs } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function TabsLayout() {
-  const { session, loading } = useAuth()
-  const { unreadCount } = useNotifications()
-
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <ActivityIndicator />
-      </View>
-    )
-  }
-
-  if (!session) {
-    return <Redirect href="/" />
-  }
+  const insets = useSafeAreaInsets()
 
   return (
-    <Tabs screenOptions={{ headerShown: false }}>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: '#2563eb',
+        tabBarInactiveTintColor: '#6b7280',
+        tabBarStyle: {
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 66 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: Math.max(insets.bottom, 10),
+          backgroundColor: '#ffffff',
+          borderTopWidth: 1,
+          borderTopColor: '#e5e7eb',
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
+      }}
+    >
       <Tabs.Screen
         name="home"
-        options={{ title: 'Rides' }}
+        options={{
+          title: 'Rides',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="bicycle-outline" size={size} color={color} />
+          ),
+        }}
       />
 
       <Tabs.Screen
         name="create"
-        options={{ title: 'Create' }}
+        options={{
+          title: 'Create',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="add-circle-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="my-activities"
+        options={{
+          title: 'My rides',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="list-outline" size={size} color={color} />
+          ),
+        }}
       />
 
       <Tabs.Screen
         name="notifications"
         options={{
           title: 'Messages',
-          tabBarBadge:
-            unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={size}
+              color={color}
+            />
+          ),
         }}
       />
 
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profile' }}
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-outline" size={size} color={color} />
+          ),
+        }}
       />
     </Tabs>
   )

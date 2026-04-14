@@ -247,6 +247,10 @@ export default function ActivityDetailsScreen() {
 
   const openChatLabel = canOpenChat ? 'Open chat' : 'Join ride to access chat'
 
+  const heroImageUrl =
+    activity.circuit?.cover_image_url ||
+    'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80'
+
   return (
     <ScrollView
       contentContainerStyle={styles.container}
@@ -254,8 +258,50 @@ export default function ActivityDetailsScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
     >
-      <Text style={styles.title}>{activity.title}</Text>
-      <Text style={styles.subtitle}>Ride details</Text>
+      <View style={styles.heroCard}>
+        <Image source={{ uri: heroImageUrl }} style={styles.heroImage} resizeMode="cover" />
+
+        <View style={styles.heroOverlay}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.typeBadge}>
+              <Text style={styles.typeBadgeText}>{activity.activity_type}</Text>
+            </View>
+
+            <View
+              style={[
+                styles.statusBadge,
+                isCancelled
+                  ? styles.statusBadgeCancelled
+                  : isFull
+                    ? styles.statusBadgeFull
+                    : styles.statusBadgeOpen,
+              ]}
+            >
+              <Text style={styles.statusBadgeText}>
+                {getDisplayStatus(
+                  activity.status,
+                  participantCount,
+                  activity.max_participants
+                )}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.heroBottom}>
+            <Text style={styles.heroTitle}>{activity.title}</Text>
+
+            <Text style={styles.heroMeta}>
+              {activity.circuit
+                ? `${activity.circuit.name} · ${activity.circuit.difficulty} · ${activity.circuit.distance_km} km`
+                : activity.city}
+            </Text>
+
+            <Text style={styles.heroMetaSecondary}>
+              {formatDate(activity.start_time)}
+            </Text>
+          </View>
+        </View>
+      </View>
 
       {isHost ? (
         <View style={styles.hostBadge}>
@@ -268,12 +314,25 @@ export default function ActivityDetailsScreen() {
           id: item.user_id,
           name: item.profile?.first_name ?? null,
           avatarUrl: item.profile?.avatar_url ?? null,
+          city: item.profile?.city ?? null,
+          cyclingLevel: null,
+          ridingStyle: null,
+          bio: null,
+          reviews: [
+            {
+              id: `review-${item.user_id}-1`,
+              authorName: 'Parea rider',
+              rating: 5,
+              comment: 'Friendly rider and easy to coordinate with.',
+            },
+          ],
         }))}
         maxParticipants={activity.max_participants}
         title="Complete the team"
         emptyText="Be the first rider"
         partialText={`${participantCount} / ${activity.max_participants} spots filled`}
         fullText="Team complete"
+        activityId={activity.id}
       />
 
       <Text style={styles.teamHint}>
@@ -287,54 +346,51 @@ export default function ActivityDetailsScreen() {
       </Text>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Type</Text>
-        <Text style={styles.value}>{activity.activity_type}</Text>
+        <Text style={styles.sectionTitle}>Ride info</Text>
 
-        <Text style={styles.label}>City</Text>
-        <Text style={styles.value}>{activity.city}</Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>City</Text>
+          <Text style={styles.value}>{activity.city}</Text>
+        </View>
 
-        <Text style={styles.label}>Start time</Text>
-        <Text style={styles.value}>{formatDate(activity.start_time)}</Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Start time</Text>
+          <Text style={styles.value}>{formatDate(activity.start_time)}</Text>
+        </View>
 
-        <Text style={styles.label}>Riders</Text>
-        <Text style={styles.value}>
-          {participantCount} / {activity.max_participants}
-        </Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Riders</Text>
+          <Text style={styles.value}>
+            {participantCount} / {activity.max_participants}
+          </Text>
+        </View>
 
-        <Text style={styles.label}>Status</Text>
-        <Text style={styles.value}>
-          {getDisplayStatus(
-            activity.status,
-            participantCount,
-            activity.max_participants
-          )}
-        </Text>
-
-        <Text style={styles.label}>Circuit</Text>
         {activity.circuit ? (
-          <View style={styles.circuitCard}>
-            {activity.circuit.cover_image_url ? (
-              <Image
-                source={{ uri: activity.circuit.cover_image_url }}
-                style={styles.circuitImage}
-                resizeMode="cover"
-              />
-            ) : null}
+          <>
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Circuit</Text>
+              <Text style={styles.value}>{activity.circuit.name}</Text>
+            </View>
 
-            <Text style={styles.circuitTitle}>{activity.circuit.name}</Text>
-            <Text style={styles.circuitMeta}>
-              {activity.circuit.city} · {activity.circuit.difficulty}
-            </Text>
-            <Text style={styles.circuitMeta}>
-              {activity.circuit.distance_km} km · ~ {activity.circuit.duration_min} min
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.value}>No circuit selected</Text>
-        )}
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Difficulty</Text>
+              <Text style={styles.value}>{activity.circuit.difficulty}</Text>
+            </View>
 
-        <Text style={styles.label}>Description</Text>
-        <Text style={styles.value}>{activity.description ?? '—'}</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Distance</Text>
+              <Text style={styles.value}>{activity.circuit.distance_km} km</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Duration</Text>
+              <Text style={styles.value}>~ {activity.circuit.duration_min} min</Text>
+            </View>
+          </>
+        ) : null}
+
+        <Text style={styles.labelBlock}>Description</Text>
+        <Text style={styles.descriptionText}>{activity.description ?? '—'}</Text>
       </View>
 
       {participantsError ? <Text style={styles.errorText}>{participantsError}</Text> : null}
@@ -374,45 +430,47 @@ export default function ActivityDetailsScreen() {
         )}
       </View>
 
-      <Pressable
-        onPress={handleJoin}
-        disabled={!canJoin}
-        style={[styles.joinButton, !canJoin && styles.joinButtonDisabled]}
-      >
-        <Text style={styles.joinButtonText}>{joinButtonLabel}</Text>
-      </Pressable>
-
-      <Pressable
-        onPress={handleOpenChat}
-        disabled={!canOpenChat}
-        style={[styles.groupButton, !canOpenChat && styles.groupButtonDisabled]}
-      >
-        <Text style={styles.groupButtonText}>{openChatLabel}</Text>
-      </Pressable>
-
-      {isJoined ? (
+      <View style={styles.actionsColumn}>
         <Pressable
-          onPress={handleLeave}
-          disabled={!canLeave}
-          style={[styles.leaveButton, !canLeave && styles.leaveButtonDisabled]}
+          onPress={handleJoin}
+          disabled={!canJoin}
+          style={[styles.joinButton, !canJoin && styles.joinButtonDisabled]}
         >
-          <Text style={styles.leaveButtonText}>
-            {isHost ? 'Host cannot leave' : 'Leave ride'}
-          </Text>
+          <Text style={styles.joinButtonText}>{joinButtonLabel}</Text>
         </Pressable>
-      ) : null}
 
-      {isHost ? (
         <Pressable
-          onPress={handleCancelRide}
-          disabled={!canCancel}
-          style={[styles.cancelButton, !canCancel && styles.cancelButtonDisabled]}
+          onPress={handleOpenChat}
+          disabled={!canOpenChat}
+          style={[styles.groupButton, !canOpenChat && styles.groupButtonDisabled]}
         >
-          <Text style={styles.cancelButtonText}>
-            {isCancelled ? 'Ride cancelled' : 'Cancel ride'}
-          </Text>
+          <Text style={styles.groupButtonText}>{openChatLabel}</Text>
         </Pressable>
-      ) : null}
+
+        {isJoined ? (
+          <Pressable
+            onPress={handleLeave}
+            disabled={!canLeave}
+            style={[styles.leaveButton, !canLeave && styles.leaveButtonDisabled]}
+          >
+            <Text style={styles.leaveButtonText}>
+              {isHost ? 'Host cannot leave' : 'Leave ride'}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {isHost ? (
+          <Pressable
+            onPress={handleCancelRide}
+            disabled={!canCancel}
+            style={[styles.cancelButton, !canCancel && styles.cancelButtonDisabled]}
+          >
+            <Text style={styles.cancelButtonText}>
+              {isCancelled ? 'Ride cancelled' : 'Cancel ride'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
     </ScrollView>
   )
 }
@@ -422,6 +480,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
   centerContainer: {
     flex: 1,
@@ -431,19 +490,81 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   container: {
-    padding: 24,
+    padding: 20,
+    paddingTop: 16,
     paddingBottom: 40,
     gap: 16,
     backgroundColor: '#fff',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 20,
+  heroCard: {
+    height: 290,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#e5e7eb',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.30)',
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  heroBottom: {
+    gap: 6,
+  },
+  heroTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  heroMeta: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#f8fafc',
+  },
+  heroMetaSecondary: {
+    fontSize: 14,
+    color: '#e2e8f0',
+    fontWeight: '600',
+  },
+  typeBadge: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  typeBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  statusBadgeOpen: {
+    backgroundColor: '#dcfce7',
+  },
+  statusBadgeFull: {
+    backgroundColor: '#fee2e2',
+  },
+  statusBadgeCancelled: {
+    backgroundColor: '#e5e7eb',
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
   },
   hostBadge: {
     alignSelf: 'flex-start',
@@ -457,38 +578,65 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  teamHint: {
+    fontSize: 14,
+    color: '#475569',
+    marginTop: -4,
+  },
   card: {
     borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 16,
+    borderColor: '#e5e7eb',
+    borderRadius: 20,
     padding: 18,
-    gap: 8,
+    gap: 12,
     backgroundColor: '#fafafa',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '700',
+    color: '#111827',
+    marginBottom: 6,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 16,
+    alignItems: 'flex-start',
+    paddingVertical: 2,
   },
   label: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#555',
-    marginTop: 6,
+    color: '#64748b',
+  },
+  labelBlock: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+    marginTop: 8,
   },
   value: {
+    flexShrink: 1,
     fontSize: 16,
-    color: '#111',
+    color: '#111827',
+    textAlign: 'right',
+  },
+  descriptionText: {
+    fontSize: 16,
+    color: '#111827',
+    lineHeight: 24,
+    textAlign: 'left',
   },
   participantRow: {
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',
-    marginTop: 12,
+    paddingVertical: 8,
   },
   participantAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
   },
   avatarFallback: {
     backgroundColor: '#0B1220',
@@ -498,7 +646,7 @@ const styles = StyleSheet.create({
   avatarFallbackText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   participantInfo: {
     flex: 1,
@@ -506,17 +654,21 @@ const styles = StyleSheet.create({
   participantName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111',
+    color: '#111827',
   },
   participantMeta: {
     fontSize: 14,
-    color: '#666',
+    color: '#64748b',
     marginTop: 2,
+  },
+  actionsColumn: {
+    gap: 12,
+    marginTop: 4,
   },
   joinButton: {
     backgroundColor: '#22c55e',
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 17,
+    borderRadius: 16,
     alignItems: 'center',
   },
   joinButtonDisabled: {
@@ -524,13 +676,13 @@ const styles = StyleSheet.create({
   },
   joinButtonText: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0B1220',
+    fontWeight: '800',
+    color: '#08101c',
   },
   groupButton: {
     backgroundColor: '#0B1220',
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 17,
+    borderRadius: 16,
     alignItems: 'center',
   },
   groupButtonDisabled: {
@@ -538,13 +690,13 @@ const styles = StyleSheet.create({
   },
   groupButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#fff',
   },
   leaveButton: {
     backgroundColor: '#ef4444',
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 17,
+    borderRadius: 16,
     alignItems: 'center',
   },
   leaveButtonDisabled: {
@@ -552,13 +704,13 @@ const styles = StyleSheet.create({
   },
   leaveButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#fff',
   },
   cancelButton: {
     backgroundColor: '#111827',
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 17,
+    borderRadius: 16,
     alignItems: 'center',
   },
   cancelButtonDisabled: {
@@ -566,45 +718,15 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#fff',
   },
   errorText: {
     color: 'red',
-    fontSize: 16,
+    fontSize: 15,
   },
   emptyText: {
     fontSize: 16,
     color: '#555',
-  },
-  teamHint: {
-    fontSize: 14,
-    color: '#475569',
-    marginTop: -4,
-  },
-  circuitCard: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 14,
-    padding: 14,
-    backgroundColor: '#f8fafc',
-  },
-  circuitImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 12,
-    marginBottom: 12,
-    backgroundColor: '#e5e7eb',
-  },
-  circuitTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  circuitMeta: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#64748b',
   },
 })
