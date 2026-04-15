@@ -45,7 +45,11 @@ export default function RiderProfileModal({
 
   if (!rider) return null
 
-  const canLeaveReview = !!currentUserId && !!activityId && currentUserId !== rider.id
+  const canLeaveReview =
+    !!currentUserId &&
+    !!activityId &&
+    currentUserId !== rider.id &&
+    !!rider.canReview
 
   return (
     <>

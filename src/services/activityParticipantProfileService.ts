@@ -10,6 +10,9 @@ export type ActivityParticipantProfile = {
     first_name: string | null
     avatar_url: string | null
     city: string | null
+    bio: string | null
+    cycling_level: string | null
+    riding_style: string | null
   } | null
 }
 
@@ -26,7 +29,10 @@ export const activityParticipantProfileService = {
           id,
           first_name,
           avatar_url,
-          city
+          city,
+          bio,
+          cycling_level,
+          riding_style
         )
       `)
       .eq('activity_id', activityId)
@@ -47,6 +53,9 @@ export const activityParticipantProfileService = {
             first_name: row.public_profiles.first_name,
             avatar_url: row.public_profiles.avatar_url,
             city: row.public_profiles.city,
+            bio: row.public_profiles.bio,
+            cycling_level: row.public_profiles.cycling_level,
+            riding_style: row.public_profiles.riding_style,
           }
         : null,
     }))

@@ -315,17 +315,14 @@ export default function ActivityDetailsScreen() {
           name: item.profile?.first_name ?? null,
           avatarUrl: item.profile?.avatar_url ?? null,
           city: item.profile?.city ?? null,
-          cyclingLevel: null,
-          ridingStyle: null,
-          bio: null,
-          reviews: [
-            {
-              id: `review-${item.user_id}-1`,
-              authorName: 'Parea rider',
-              rating: 5,
-              comment: 'Friendly rider and easy to coordinate with.',
-            },
-          ],
+          cyclingLevel: item.profile?.cycling_level ?? null,
+          ridingStyle: item.profile?.riding_style ?? null,
+          bio: item.profile?.bio ?? null,
+          reviews: [],
+          canReview:
+            !!userId &&
+            userId !== item.user_id &&
+            activity.status === 'completed',
         }))}
         maxParticipants={activity.max_participants}
         title="Complete the team"

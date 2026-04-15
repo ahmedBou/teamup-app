@@ -7,6 +7,9 @@ export type ActivityParticipantPreview = {
   firstName: string | null
   avatarUrl: string | null
   city: string | null
+  bio: string | null
+  cyclingLevel: string | null
+  ridingStyle: string | null
 }
 
 type UseActivityParticipantPreviewsResult = {
@@ -44,15 +47,20 @@ export function useActivityParticipantPreviews(
         .select(`
           activity_id,
           user_id,
-          profiles:user_id (
+          public_profiles:user_id (
             first_name,
             avatar_url,
-            city
+            city,
+            bio,
+            cycling_level,
+            riding_style
           )
         `)
         .in('activity_id', stableIds)
 
-      if (error) throw error
+      if (error) {
+        throw error
+      }
 
       const grouped: Record<string, ActivityParticipantPreview[]> = {}
 
@@ -61,9 +69,9 @@ export function useActivityParticipantPreviews(
       }
 
       for (const row of data ?? []) {
-        const profile = Array.isArray((row as any).profiles)
-          ? (row as any).profiles[0]
-          : (row as any).profiles
+        const profile = Array.isArray((row as any).public_profiles)
+          ? (row as any).public_profiles[0]
+          : (row as any).public_profiles
 
         const preview: ActivityParticipantPreview = {
           activityId: (row as any).activity_id,
@@ -71,6 +79,9 @@ export function useActivityParticipantPreviews(
           firstName: profile?.first_name ?? null,
           avatarUrl: profile?.avatar_url ?? null,
           city: profile?.city ?? null,
+          bio: profile?.bio ?? null,
+          cyclingLevel: profile?.cycling_level ?? null,
+          ridingStyle: profile?.riding_style ?? null,
         }
 
         if (!grouped[preview.activityId]) {

@@ -16,11 +16,13 @@ type HomeRideParticipant = {
     rating: number
     comment: string
   }[]
+  canReview?: boolean
 }
 
 type HomeRidePuzzleOverlayProps = {
   participants: HomeRideParticipant[]
   maxParticipants: number
+  activityId?: string | null
 }
 
 function getInitials(name: string | null): string {
@@ -33,6 +35,7 @@ function getInitials(name: string | null): string {
 export default function HomeRidePuzzleOverlay({
   participants,
   maxParticipants,
+  activityId = null,
 }: HomeRidePuzzleOverlayProps) {
   const [selectedRider, setSelectedRider] = useState<HomeRideParticipant | null>(null)
 
@@ -81,6 +84,7 @@ export default function HomeRidePuzzleOverlay({
         rider={selectedRider}
         visible={!!selectedRider}
         onClose={() => setSelectedRider(null)}
+        activityId={activityId}
       />
     </>
   )

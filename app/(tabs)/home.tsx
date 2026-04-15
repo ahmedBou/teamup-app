@@ -57,22 +57,19 @@ export default function HomeScreen() {
   const userId = session?.user?.id ?? null
 
   const { activities, loading, error, refreshActivities } = useActivities()
+
   const activityIds = useMemo(
     () => activities.map((activity) => activity.id),
     [activities]
   )
 
-  const {
-    previewsByActivityId,
-    refresh: refreshParticipantPreviews,
-  } = useActivityParticipantPreviews(activityIds)
+  const { previewsByActivityId } = useActivityParticipantPreviews(activityIds)
 
   useFocusEffect(
     useCallback(() => {
       void refreshActivities()
     }, [refreshActivities])
   )
-
 
   const handleJoinFromHome = async (activity: Activity) => {
     if (!userId) {
@@ -115,10 +112,9 @@ export default function HomeScreen() {
     const nextIndex = index + 1
     if (nextIndex >= activities.length) return
 
-    listRef.current?.scrollToIndex({
-      index: nextIndex,
+    listRef.current?.scrollToOffset({
+      offset: CARD_WIDTH * nextIndex,
       animated: true,
-      viewPosition: 0,
     })
   }
 
@@ -191,25 +187,22 @@ export default function HomeScreen() {
               </View>
             </View>
 
-           <HomeRidePuzzleOverlay
+            <HomeRidePuzzleOverlay
               participants={(previewsByActivityId[activity.id] ?? []).map((item) => ({
                 id: item.userId,
                 name: item.firstName,
                 avatarUrl: item.avatarUrl,
-                city: item.city,
-                cyclingLevel: null,
-                ridingStyle: null,
-                bio: null,
-                reviews: [
-                  {
-                    id: `review-${item.userId}-1`,
-                    authorName: 'Parea rider',
-                    rating: 5,
-                    comment: 'Friendly rider and easy to coordinate with.',
-                  },
-                ],
+                cyclingLevel: item.cyclingLevel,   
+                ridingStyle: item.ridingStyle,
+                bio: item.bio,
+                reviews: [],
+                canReview:
+                  !!userId &&
+                  userId !== item.userId &&
+                  activity.status === 'completed',
               }))}
               maxParticipants={activity.max_participants}
+              activityId={activity.id}
             />
 
             <View style={styles.bottomActions}>
@@ -267,6 +260,7 @@ export default function HomeScreen() {
         showsHorizontalScrollIndicator={false}
         snapToInterval={CARD_WIDTH}
         decelerationRate="fast"
+        disableIntervalMomentum
         contentContainerStyle={{ paddingBottom: 0 }}
         getItemLayout={(_, index) => ({
           length: CARD_WIDTH,

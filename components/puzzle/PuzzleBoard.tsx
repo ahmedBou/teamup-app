@@ -18,6 +18,7 @@ export type PuzzleSlot = {
   ridingStyle?: string | null
   bio?: string | null
   reviews?: RiderReview[]
+  canReview?: boolean
 }
 
 type PuzzleBoardProps = {
@@ -83,7 +84,6 @@ export default function PuzzleBoard({
               {slot.participant ? (
                 <Pressable
                   onPress={() => {
-                    console.log('avatar clicked', slot.participant?.name)
                     setSelectedRider(slot.participant)
                   }}
                   style={styles.avatarPressable}
