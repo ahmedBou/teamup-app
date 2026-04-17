@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../src/lib/supabase'
 import {
-    AppNotification,
-    notificationService,
+  AppNotification,
+  notificationService,
 } from '../src/services/notificationService'
 
 type UseNotificationsResult = {
@@ -21,27 +21,64 @@ export function useNotifications(): UseNotificationsResult {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
-  const fetchNotifications = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true)
-      } else {
-        setLoading(true)
-      }
+  useEffect(() => {
+    let active = true
 
-      setError(null)
+    const setupUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-      const data = await notificationService.listMyNotifications()
-      setNotifications(data)
-    } catch (err: any) {
-      console.error('useNotifications.fetchNotifications', err)
-      setError(err?.message ?? 'Failed to load notifications')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (!active) return
+      setUserId(user?.id ?? null)
+    }
+
+    void setupUser()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_, session) => {
+      setUserId(session?.user?.id ?? null)
+    })
+
+    return () => {
+      active = false
+      subscription.unsubscribe()
     }
   }, [])
+
+  const fetchNotifications = useCallback(
+    async (isRefresh = false) => {
+      if (!userId) {
+        setNotifications([])
+        setLoading(false)
+        setRefreshing(false)
+        return
+      }
+
+      try {
+        if (isRefresh) {
+          setRefreshing(true)
+        } else {
+          setLoading(true)
+        }
+
+        setError(null)
+
+        const data = await notificationService.listMyNotifications(userId)
+        setNotifications(data)
+      } catch (err: any) {
+        console.error('useNotifications.fetchNotifications', err)
+        setError(err?.message ?? 'Failed to load notifications')
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [userId]
+  )
 
   const refresh = useCallback(() => {
     return fetchNotifications(true)
@@ -52,47 +89,45 @@ export function useNotifications(): UseNotificationsResult {
   }, [fetchNotifications])
 
   useEffect(() => {
-    let unsubscribe: (() => void) | null = null
-    let active = true
+    if (!userId) return
 
-    const setup = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!active || !user) return
-
-      unsubscribe = notificationService.subscribeToMyNotifications(user.id, () => {
+    const unsubscribe = notificationService.subscribeToMyNotifications(
+      userId,
+      () => {
         void fetchNotifications(true)
-      })
-    }
-
-    void setup()
+      }
+    )
 
     return () => {
-      active = false
       unsubscribe?.()
     }
-  }, [fetchNotifications])
+  }, [userId, fetchNotifications])
 
-  const markAsRead = useCallback(async (notificationId: string) => {
-    try {
-      await notificationService.markAsRead(notificationId)
+  const markAsRead = useCallback(
+    async (notificationId: string) => {
+      if (!userId) return
 
-      setNotifications((prev) =>
-        prev.map((item) =>
-          item.id === notificationId ? { ...item, is_read: true } : item
+      try {
+        await notificationService.markAsRead(notificationId, userId)
+
+        setNotifications((prev) =>
+          prev.map((item) =>
+            item.id === notificationId ? { ...item, is_read: true } : item
+          )
         )
-      )
-    } catch (err: any) {
-      console.error('useNotifications.markAsRead', err)
-      setError(err?.message ?? 'Failed to mark notification as read')
-    }
-  }, [])
+      } catch (err: any) {
+        console.error('useNotifications.markAsRead', err)
+        setError(err?.message ?? 'Failed to mark notification as read')
+      }
+    },
+    [userId]
+  )
 
   const markAllAsRead = useCallback(async () => {
+    if (!userId) return
+
     try {
-      await notificationService.markAllAsRead()
+      await notificationService.markAllAsRead(userId)
 
       setNotifications((prev) =>
         prev.map((item) => ({ ...item, is_read: true }))
@@ -101,7 +136,7 @@ export function useNotifications(): UseNotificationsResult {
       console.error('useNotifications.markAllAsRead', err)
       setError(err?.message ?? 'Failed to mark all notifications as read')
     }
-  }, [])
+  }, [userId])
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,

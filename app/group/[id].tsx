@@ -49,10 +49,21 @@ export default function GroupScreen() {
   const canAccessChat = !!userId && isParticipant
 
   useEffect(() => {
-  if (!activityId || !canAccessChat) return
+    if (!activityId || !userId || !canAccessChat) return
 
-  void notificationService.markMessageNotificationsAsReadForActivity(activityId)
-}, [activityId, canAccessChat])
+    const markNotificationsAsRead = async () => {
+      try {
+        await notificationService.markMessageNotificationsAsReadForActivity(
+          activityId,
+          userId
+        )
+      } catch (err) {
+        console.error('Failed to mark message notifications as read', err)
+      }
+    }
+
+    void markNotificationsAsRead()
+  }, [activityId, userId, canAccessChat])
 
   const {
     messages,
