@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router'
-import { useState } from 'react'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Pressable,
@@ -10,214 +10,261 @@ import {
   View,
 } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
-import { useCircuits } from '../../hooks/useCircuits'
 import { activityService } from '../../src/services/activityService'
-import type { ActivityType } from '../../src/types/activity'
+import { circuitService } from '../../src/services/circuitService'
+import type { Circuit } from '../../src/types/circuit'
 
-const activityTypes: ActivityType[] = [
-  'road_ride',
-  'mtb_ride',
-  'gravel_ride',
-  'casual_ride',
+type ActivityType = 'road_ride' | 'mtb_ride' | 'gravel_ride' | 'casual_ride'
+
+const activityTypeOptions: { value: ActivityType; label: string }[] = [
+  { value: 'road_ride', label: 'Road ride' },
+  { value: 'mtb_ride', label: 'MTB ride' },
+  { value: 'gravel_ride', label: 'Gravel ride' },
+  { value: 'casual_ride', label: 'Casual ride' },
 ]
-
-function isValidDate(date: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(date)
-}
-
-function isValidTime(time: string) {
-  return /^\d{2}:\d{2}$/.test(time)
-}
-
-function buildIsoDateTime(date: string, time: string) {
-  return new Date(`${date}T${time}:00`).toISOString()
-}
 
 export default function CreateActivityScreen() {
   const router = useRouter()
   const { session } = useAuth()
-  const { circuits, loading: circuitsLoading, error: circuitsError } = useCircuits()
+  const userId = session?.user?.id ?? null
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [city, setCity] = useState('Temara')
   const [activityType, setActivityType] = useState<ActivityType>('road_ride')
-  const [city, setCity] = useState('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [maxParticipants, setMaxParticipants] = useState('6')
   const [selectedCircuitId, setSelectedCircuitId] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
 
-  const handleCreate = async () => {
-    const hostId = session?.user?.id
+  const [circuits, setCircuits] = useState<Circuit[]>([])
+  const [circuitsLoading, setCircuitsLoading] = useState(false)
+  const [circuitsError, setCircuitsError] = useState<string | null>(null)
 
-    if (!hostId) {
-      Alert.alert('Error', 'No authenticated user found')
+  const [submitting, setSubmitting] = useState(false)
+
+  const selectedCircuit = useMemo(
+    () => circuits.find((circuit) => circuit.id === selectedCircuitId) ?? null,
+    [circuits, selectedCircuitId]
+  )
+
+  const loadCircuits = useCallback(async () => {
+    try {
+      setCircuitsLoading(true)
+      setCircuitsError(null)
+
+      const data = await circuitService.listActiveCircuits()
+      setCircuits(data)
+
+      setSelectedCircuitId((currentId) => {
+        if (!currentId) return currentId
+        const stillExists = data.some((circuit) => circuit.id === currentId)
+        return stillExists ? currentId : null
+      })
+    } catch (err: any) {
+      setCircuitsError(err?.message ?? 'Unable to load circuits.')
+    } finally {
+      setCircuitsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadCircuits()
+  }, [loadCircuits])
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadCircuits()
+    }, [loadCircuits])
+  )
+
+  const handleCreateActivity = async () => {
+    if (!userId) {
+      Alert.alert('Login required', 'You must be logged in to create a ride.')
       return
     }
 
     if (!title.trim()) {
-      Alert.alert('Missing info', 'Please enter a title')
+      Alert.alert('Missing title', 'Please enter a ride title.')
       return
     }
 
     if (!city.trim()) {
-      Alert.alert('Missing info', 'Please enter a city')
+      Alert.alert('Missing city', 'Please enter a city.')
       return
     }
 
     if (!date.trim()) {
-      Alert.alert('Missing info', 'Please enter a date')
+      Alert.alert('Missing date', 'Please enter a date in YYYY-MM-DD format.')
       return
     }
 
     if (!time.trim()) {
-      Alert.alert('Missing info', 'Please enter a time')
+      Alert.alert('Missing time', 'Please enter a time in HH:MM format.')
       return
     }
 
     if (!selectedCircuitId) {
-      Alert.alert('Circuit required', 'Please choose a circuit before creating the ride.')
+      Alert.alert('Missing circuit', 'Please choose a circuit.')
       return
     }
 
-    if (!isValidDate(date.trim())) {
-      Alert.alert('Invalid date', 'Use this format: 2026-04-05')
+    const parsedMaxParticipants = Number(maxParticipants)
+    if (!Number.isFinite(parsedMaxParticipants) || parsedMaxParticipants < 2) {
+      Alert.alert('Invalid riders', 'Max participants must be at least 2.')
       return
     }
 
-    if (!isValidTime(time.trim())) {
-      Alert.alert('Invalid time', 'Use this format: 09:30')
-      return
-    }
-
-    const parsedMax = Number(maxParticipants)
-
-    if (!Number.isInteger(parsedMax) || parsedMax < 2) {
-      Alert.alert('Invalid value', 'Max participants must be a number greater than 1')
+    const startTime = new Date(`${date}T${time}:00`)
+    if (Number.isNaN(startTime.getTime())) {
+      Alert.alert(
+        'Invalid date or time',
+        'Please use YYYY-MM-DD for date and HH:MM for time.'
+      )
       return
     }
 
     try {
-      setSaving(true)
+      setSubmitting(true)
 
-      const startTimeIso = buildIsoDateTime(date.trim(), time.trim())
-
-      await activityService.createActivity({
-        host_id: hostId,
+      const activity = await activityService.createActivity({
+        host_id: userId,
         title: title.trim(),
         description: description.trim() || null,
         activity_type: activityType,
         city: city.trim(),
-        start_time: startTimeIso,
-        max_participants: parsedMax,
+        start_time: startTime.toISOString(),
+        max_participants: parsedMaxParticipants,
         circuit_id: selectedCircuitId,
       })
 
-      Alert.alert('Success', 'Activity created successfully')
-      router.replace('/(tabs)/home')
-    } catch (error: any) {
-      console.error('Create activity error:', error)
-      Alert.alert('Create failed', error?.message ?? 'Unknown error')
+      Alert.alert('Ride created', 'Your ride has been created successfully.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            router.push(`/activity/${activity.id}`)
+          },
+        },
+      ])
+    } catch (err: any) {
+      Alert.alert(
+        'Creation failed',
+        err?.message ?? 'Unable to create this activity.'
+      )
     } finally {
-      setSaving(false)
+      setSubmitting(false)
     }
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Create activity</Text>
-      <Text style={styles.subtitle}>Publish a new local cycling activity.</Text>
+    <View style={styles.screen}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.contentContainer}
+      >
+        <Text style={styles.title}>Create activity</Text>
+        <Text style={styles.subtitle}>
+          Organize a new ride and let riders join your team.
+        </Text>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Title</Text>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Sunday MTB ride"
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Easy local ride"
-          style={[styles.input, styles.textArea]}
-          multiline
-          textAlignVertical="top"
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>Activity type</Text>
-        <View style={styles.chipsWrap}>
-          {activityTypes.map((type) => {
-            const selected = activityType === type
-            return (
-              <Pressable
-                key={type}
-                onPress={() => setActivityType(type)}
-                style={[styles.chip, selected && styles.chipSelected]}
-              >
-                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                  {type}
-                </Text>
-              </Pressable>
-            )
-          })}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>City</Text>
-        <TextInput
-          value={city}
-          onChangeText={setCity}
-          placeholder="Temara"
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.row}>
-        <View style={[styles.section, styles.halfWidth]}>
-          <Text style={styles.label}>Date</Text>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Ride title</Text>
           <TextInput
-            value={date}
-            onChangeText={setDate}
-            placeholder="2026-04-05"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Sunday morning ride"
             style={styles.input}
           />
-          <Text style={styles.helperText}>Format: YYYY-MM-DD</Text>
         </View>
 
-        <View style={[styles.section, styles.halfWidth]}>
-          <Text style={styles.label}>Time</Text>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Description</Text>
           <TextInput
-            value={time}
-            onChangeText={setTime}
-            placeholder="09:30"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Short description of the ride"
+            multiline
+            textAlignVertical="top"
+            style={[styles.input, styles.textArea]}
+          />
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Ride type</Text>
+          <View style={styles.chipsRow}>
+            {activityTypeOptions.map((option) => {
+              const selected = activityType === option.value
+
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setActivityType(option.value)}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                >
+                  <Text
+                    style={[styles.chipText, selected && styles.chipTextSelected]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>City</Text>
+          <TextInput
+            value={city}
+            onChangeText={setCity}
+            placeholder="Temara"
             style={styles.input}
           />
-          <Text style={styles.helperText}>Format: HH:MM</Text>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Max participants</Text>
-        <TextInput
-          value={maxParticipants}
-          onChangeText={setMaxParticipants}
-          placeholder="6"
-          keyboardType="numeric"
-          style={styles.input}
-        />
-      </View>
+        <View style={styles.row}>
+          <View style={[styles.fieldGroup, styles.halfField]}>
+            <Text style={styles.label}>Date</Text>
+            <TextInput
+              value={date}
+              onChangeText={setDate}
+              placeholder="2026-04-18"
+              style={styles.input}
+            />
+          </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Choose a circuit</Text>
+          <View style={[styles.fieldGroup, styles.halfField]}>
+            <Text style={styles.label}>Time</Text>
+            <TextInput
+              value={time}
+              onChangeText={setTime}
+              placeholder="07:00"
+              style={styles.input}
+            />
+          </View>
+        </View>
+
+        <View style={[styles.fieldGroup, styles.halfField]}>
+          <Text style={styles.label}>Max riders</Text>
+          <TextInput
+            value={maxParticipants}
+            onChangeText={setMaxParticipants}
+            placeholder="6"
+            keyboardType="numeric"
+            style={styles.input}
+          />
+        </View>
+
+        <View style={styles.circuitHeaderRow}>
+          <Text style={styles.label}>Choose a circuit</Text>
+
+          <Pressable
+            onPress={() => router.push('/create-circuit')}
+            style={styles.addCircuitButton}
+          >
+            <Text style={styles.addCircuitButtonText}>Create new circuit</Text>
+          </Pressable>
+        </View>
 
         {circuitsLoading ? (
           <Text style={styles.helperText}>Loading circuits...</Text>
@@ -233,7 +280,10 @@ export default function CreateActivityScreen() {
               return (
                 <Pressable
                   key={circuit.id}
-                  onPress={() => setSelectedCircuitId(circuit.id)}
+                  onPress={() => {
+                    setSelectedCircuitId(circuit.id)
+                    setCity(circuit.city ?? city)
+                  }}
                   style={[
                     styles.circuitCard,
                     selected && styles.circuitCardSelected,
@@ -243,86 +293,94 @@ export default function CreateActivityScreen() {
                   <Text style={styles.circuitMeta}>
                     {circuit.city} · {circuit.difficulty} · {circuit.distance_km} km
                   </Text>
-                  <Text style={styles.circuitMeta}>
-                    ~ {circuit.duration_min} min
-                  </Text>
+                  <Text style={styles.circuitMeta}>~ {circuit.duration_min} min</Text>
                 </Pressable>
               )
             })}
           </View>
         )}
-      </View>
 
-      <Pressable
-        onPress={handleCreate}
-        disabled={saving}
-        style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-      >
-        <Text style={styles.saveButtonText}>
-          {saving ? 'Creating...' : 'Create activity'}
-        </Text>
-      </Pressable>
-    </ScrollView>
+        {selectedCircuit ? (
+          <View style={styles.selectedCircuitBox}>
+            <Text style={styles.selectedCircuitTitle}>Selected circuit</Text>
+            <Text style={styles.selectedCircuitText}>{selectedCircuit.name}</Text>
+          </View>
+        ) : null}
+
+        <Pressable
+          onPress={() => void handleCreateActivity()}
+          disabled={submitting}
+          style={[styles.primaryButton, submitting && styles.buttonDisabled]}
+        >
+          <Text style={styles.primaryButtonText}>
+            {submitting ? 'Creating activity...' : 'Create activity'}
+          </Text>
+        </Pressable>
+      </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 24,
-    paddingBottom: 40,
-    gap: 18,
+  screen: {
+    flex: 1,
     backgroundColor: '#fff',
   },
+  contentContainer: {
+    padding: 20,
+    paddingBottom: 220,
+    gap: 18,
+  },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 20,
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#111827',
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: '#64748b',
+    lineHeight: 24,
   },
-  section: {
-    gap: 10,
+  fieldGroup: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  input: {
+    minHeight: 54,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    color: '#111827',
+    backgroundColor: '#fff',
+  },
+  textArea: {
+    minHeight: 120,
+    paddingTop: 14,
   },
   row: {
     flexDirection: 'row',
     gap: 12,
   },
-  halfWidth: {
+  halfField: {
     flex: 1,
   },
-  label: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d0d0d0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    backgroundColor: '#fff',
-  },
-  textArea: {
-    minHeight: 110,
-  },
-  helperText: {
-    fontSize: 13,
-    color: '#666',
-  },
-  chipsWrap: {
+  chipsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 10,
+    flexWrap: 'wrap',
   },
   chip: {
-    borderWidth: 1,
-    borderColor: '#cfcfcf',
-    borderRadius: 999,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
     backgroundColor: '#fff',
   },
   chipSelected: {
@@ -331,53 +389,93 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 14,
-    color: '#222',
+    fontWeight: '700',
+    color: '#111827',
   },
   chipTextSelected: {
     color: '#fff',
   },
+  circuitHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  addCircuitButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#dbeafe',
+  },
+  addCircuitButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  helperText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#ef4444',
+  },
   circuitList: {
     gap: 12,
-    marginTop: 4,
   },
   circuitCard: {
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     backgroundColor: '#fafafa',
+    gap: 4,
   },
   circuitCardSelected: {
-    borderColor: '#2563eb',
-    backgroundColor: '#eff6ff',
+    borderColor: '#22c55e',
+    backgroundColor: '#f0fdf4',
   },
   circuitName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#111827',
   },
   circuitMeta: {
-    marginTop: 4,
-    fontSize: 13,
+    fontSize: 14,
     color: '#64748b',
+    fontWeight: '600',
   },
-  saveButton: {
-    marginTop: 10,
+  selectedCircuitBox: {
+    borderWidth: 1,
+    borderColor: '#86efac',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 16,
+    padding: 14,
+    gap: 4,
+  },
+  selectedCircuitTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  selectedCircuitText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  primaryButton: {
     backgroundColor: '#22c55e',
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: 'center',
+    marginTop: 8,
   },
-  saveButtonDisabled: {
-    opacity: 0.7,
-  },
-  saveButtonText: {
+  primaryButtonText: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0B1220',
+    fontWeight: '800',
+    color: '#08101c',
   },
-  errorText: {
-    color: 'red',
-    fontSize: 14,
+  buttonDisabled: {
+    opacity: 0.7,
   },
 })
