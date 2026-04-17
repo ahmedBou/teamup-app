@@ -200,6 +200,7 @@ export async function getAllCircuits(): Promise<Circuit[]> {
       created_at,
       updated_at
     `)
+    .eq('is_active', true)
     .order('name', { ascending: true })
 
   if (error) throw error

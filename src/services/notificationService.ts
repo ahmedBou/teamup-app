@@ -37,13 +37,15 @@ type NotificationRow = {
   actor_profile: ActorProfile | ActorProfile[] | null
 }
 
-function normalizeActorProfile(profile: NotificationRow['actor_profile']): ActorProfile | null {
+function normalizeActorProfile(
+  profile: NotificationRow['actor_profile']
+): ActorProfile | null {
   if (!profile) return null
   return Array.isArray(profile) ? profile[0] ?? null : profile
 }
 
 export const notificationService = {
-  async listMyNotifications(): Promise<AppNotification[]> {
+  async listMyNotifications(userId: string): Promise<AppNotification[]> {
     const { data, error } = await supabase
       .from('notifications')
       .select(`
@@ -64,6 +66,7 @@ export const notificationService = {
           city
         )
       `)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -85,11 +88,12 @@ export const notificationService = {
     }))
   },
 
-  async markAsRead(notificationId: string): Promise<void> {
+  async markAsRead(notificationId: string, userId: string): Promise<void> {
     const { error } = await supabase
       .from('notifications')
       .update({ is_read: true })
       .eq('id', notificationId)
+      .eq('user_id', userId)
       .eq('is_read', false)
 
     if (error) {
@@ -97,10 +101,11 @@ export const notificationService = {
     }
   },
 
-  async markAllAsRead(): Promise<void> {
+  async markAllAsRead(userId: string): Promise<void> {
     const { error } = await supabase
       .from('notifications')
       .update({ is_read: true })
+      .eq('user_id', userId)
       .eq('is_read', false)
 
     if (error) {
@@ -108,10 +113,14 @@ export const notificationService = {
     }
   },
 
-  async markMessageNotificationsAsReadForActivity(activityId: string): Promise<void> {
+  async markMessageNotificationsAsReadForActivity(
+    activityId: string,
+    userId: string
+  ): Promise<void> {
     const { error } = await supabase
       .from('notifications')
       .update({ is_read: true })
+      .eq('user_id', userId)
       .eq('type', 'new_message')
       .eq('activity_id', activityId)
       .eq('is_read', false)
