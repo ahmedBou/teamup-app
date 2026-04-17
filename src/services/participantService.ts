@@ -37,21 +37,17 @@ export const participantService = {
     return !!data
   },
 
-  async joinActivity(activityId: string, userId: string): Promise<ActivityParticipant> {
-    const { data, error } = await supabase
-      .from('activity_participants')
-      .insert({
-        activity_id: activityId,
-        user_id: userId,
-      })
-      .select()
-      .single()
+  async joinActivity(activityId: string, userId: string) {
+    const { data, error } = await supabase.rpc('join_activity_atomic', {
+      p_activity_id: activityId,
+      p_user_id: userId,
+    })
 
     if (error) {
       throw error
     }
 
-    return data as ActivityParticipant
+    return data
   },
 
   async leaveActivity(activityId: string, userId: string): Promise<void> {
