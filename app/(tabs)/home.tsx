@@ -63,12 +63,16 @@ export default function HomeScreen() {
     [activities]
   )
 
-  const { previewsByActivityId } = useActivityParticipantPreviews(activityIds)
+  const {
+    previewsByActivityId,
+    refresh: refreshParticipantPreviews,
+  } = useActivityParticipantPreviews(activityIds)
 
   useFocusEffect(
     useCallback(() => {
       void refreshActivities()
-    }, [refreshActivities])
+      void refreshParticipantPreviews()
+    }, [refreshActivities, refreshParticipantPreviews])
   )
 
   const handleJoinFromHome = async (activity: Activity) => {

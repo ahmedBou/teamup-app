@@ -1,3 +1,4 @@
+import { useFocusEffect } from '@react-navigation/native'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
@@ -105,6 +106,11 @@ export default function ProfileScreen() {
   useEffect(() => {
     void loadProfile()
   }, [loadProfile])
+  useFocusEffect(
+    useCallback(() => {
+      void loadProfile()
+    }, [loadProfile])
+  )
 
   const handleUploadAvatar = async () => {
     if (!userId) {
@@ -119,14 +125,15 @@ export default function ProfileScreen() {
       setUploadingAvatar(true)
 
       const publicUrl = await uploadProfileAvatar(userId, asset)
+      const refreshedUrl = `${publicUrl}${publicUrl.includes('?') ? '&' : '?'}t=${Date.now()}`
 
       setProfile((prev) =>
         prev
-          ? { ...prev, avatar_url: publicUrl }
+          ? { ...prev, avatar_url: refreshedUrl }
           : {
               id: userId,
               first_name: null,
-              avatar_url: publicUrl,
+              avatar_url: refreshedUrl,
               city: null,
               bio: null,
               cycling_level: null,
@@ -134,6 +141,8 @@ export default function ProfileScreen() {
               onboarding_completed: false,
             }
       )
+
+      await loadProfile()
 
       Alert.alert('Success', 'Profile photo updated.')
     } catch (err: any) {

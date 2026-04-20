@@ -35,8 +35,8 @@ function getDisplayStatus(
 }
 
 export default function ActivityDetailsScreen() {
-  const params = useLocalSearchParams<{ id?: string }>()
-  const activityId = params.id ?? null
+  const params = useLocalSearchParams<{ id?: string | string[] }>()
+  const activityId = Array.isArray(params.id) ? params.id[0] : params.id ?? null
   const router = useRouter()
 
   const { session } = useAuth()
