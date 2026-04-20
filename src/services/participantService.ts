@@ -4,7 +4,7 @@ export type ActivityParticipant = {
   id: string
   activity_id: string
   user_id: string
-  joined_at: string
+  created_at: string
 }
 
 export const participantService = {
@@ -13,11 +13,9 @@ export const participantService = {
       .from('activity_participants')
       .select('*')
       .eq('activity_id', activityId)
-      .order('joined_at', { ascending: true })
+      .order('created_at', { ascending: true })
 
-    if (error) {
-      throw error
-    }
+    if (error) throw error
 
     return (data ?? []) as ActivityParticipant[]
   },
@@ -30,35 +28,30 @@ export const participantService = {
       .eq('user_id', userId)
       .maybeSingle()
 
-    if (error) {
-      throw error
-    }
-
+    if (error) throw error
     return !!data
   },
 
-  async joinActivity(activityId: string, userId: string) {
+  async joinActivity(
+    activityId: string,
+    userId: string
+  ): Promise<ActivityParticipant> {
     const { data, error } = await supabase.rpc('join_activity_atomic', {
       p_activity_id: activityId,
       p_user_id: userId,
     })
 
-    if (error) {
-      throw error
-    }
+    if (error) throw error
 
-    return data
+    return data as ActivityParticipant
   },
 
   async leaveActivity(activityId: string, userId: string): Promise<void> {
-    const { error } = await supabase
-      .from('activity_participants')
-      .delete()
-      .eq('activity_id', activityId)
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('leave_activity_atomic', {
+      p_activity_id: activityId,
+      p_user_id: userId,
+    })
 
-    if (error) {
-      throw error
-    }
+    if (error) throw error
   },
 }

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import type { Activity } from '../types/activity'
+import type { Activity, CreateActivityInput } from '../types/activity'
 
 type ActivityRow = Omit<Activity, 'participant_count'> & {
   participant_count?: number
@@ -72,33 +72,27 @@ export const activityService = {
     return sortActivitiesByStartTime(enrichedActivities)
   },
 
-async createActivity(input: {
-  host_id: string
-  title: string
-  description: string | null
-  activity_type: string
-  city: string
-  start_time: string
-  max_participants: number
-  circuit_id: string
-}) {
-  const { data, error } = await supabase.rpc('create_activity_atomic', {
-    p_host_id: input.host_id,
-    p_title: input.title,
-    p_description: input.description,
-    p_activity_type: input.activity_type,
-    p_city: input.city,
-    p_start_time: input.start_time,
-    p_max_participants: input.max_participants,
-    p_circuit_id: input.circuit_id,
-  })
+  async createActivity(input: CreateActivityInput): Promise<Activity> {
+    const { data, error } = await supabase.rpc('create_activity_atomic', {
+      p_host_id: input.host_id,
+      p_title: input.title,
+      p_description: input.description ?? null,
+      p_activity_type: input.activity_type,
+      p_city: input.city,
+      p_start_time: input.start_time,
+      p_max_participants: input.max_participants,
+      p_circuit_id: input.circuit_id ?? null,
+    })
 
-  if (error) {
-    throw error
-  }
+    if (error) {
+      throw error
+    }
 
-  return data
-},
+    return {
+      ...(data as Omit<Activity, 'participant_count' | 'circuit'>),
+      participant_count: 1,
+    }
+  },
 
   async getActivityById(activityId: string): Promise<Activity | null> {
     const { data, error } = await supabase
