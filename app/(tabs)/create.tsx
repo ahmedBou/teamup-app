@@ -1,3 +1,4 @@
+import DateTimePicker from '@react-native-community/datetimepicker'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -32,8 +33,19 @@ export default function CreateActivityScreen() {
   const [description, setDescription] = useState('')
   const [city, setCity] = useState('Temara')
   const [activityType, setActivityType] = useState<ActivityType>('road_ride')
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
+
+  const [startDateTime, setStartDateTime] = useState(() => {
+    const initialDate = new Date()
+    initialDate.setHours(initialDate.getHours() + 1)
+    initialDate.setMinutes(0)
+    initialDate.setSeconds(0)
+    initialDate.setMilliseconds(0)
+    return initialDate
+  })
+
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [showTimePicker, setShowTimePicker] = useState(false)
+
   const [maxParticipants, setMaxParticipants] = useState('6')
   const [selectedCircuitId, setSelectedCircuitId] = useState<string | null>(null)
 
@@ -58,6 +70,7 @@ export default function CreateActivityScreen() {
 
       setSelectedCircuitId((currentId) => {
         if (!currentId) return currentId
+
         const stillExists = data.some((circuit) => circuit.id === currentId)
         return stillExists ? currentId : null
       })
@@ -78,6 +91,47 @@ export default function CreateActivityScreen() {
     }, [loadCircuits])
   )
 
+  const formattedDate = startDateTime.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  const formattedTime = startDateTime.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+  const handleDateChange = (_event: any, selectedDate?: Date) => {
+    setShowDatePicker(false)
+
+    if (!selectedDate) return
+
+    setStartDateTime((currentDate) => {
+      const nextDate = new Date(currentDate)
+      nextDate.setFullYear(selectedDate.getFullYear())
+      nextDate.setMonth(selectedDate.getMonth())
+      nextDate.setDate(selectedDate.getDate())
+      return nextDate
+    })
+  }
+
+  const handleTimeChange = (_event: any, selectedTime?: Date) => {
+    setShowTimePicker(false)
+
+    if (!selectedTime) return
+
+    setStartDateTime((currentDate) => {
+      const nextDate = new Date(currentDate)
+      nextDate.setHours(selectedTime.getHours())
+      nextDate.setMinutes(selectedTime.getMinutes())
+      nextDate.setSeconds(0)
+      nextDate.setMilliseconds(0)
+      return nextDate
+    })
+  }
+
   const handleCreateActivity = async () => {
     if (!userId) {
       Alert.alert('Login required', 'You must be logged in to create a ride.')
@@ -94,33 +148,15 @@ export default function CreateActivityScreen() {
       return
     }
 
-    if (!date.trim()) {
-      Alert.alert('Missing date', 'Please enter a date in YYYY-MM-DD format.')
-      return
-    }
-
-    if (!time.trim()) {
-      Alert.alert('Missing time', 'Please enter a time in HH:MM format.')
-      return
-    }
-
     if (!selectedCircuitId) {
       Alert.alert('Missing circuit', 'Please choose a circuit.')
       return
     }
 
     const parsedMaxParticipants = Number(maxParticipants)
+
     if (!Number.isFinite(parsedMaxParticipants) || parsedMaxParticipants < 2) {
       Alert.alert('Invalid riders', 'Max participants must be at least 2.')
-      return
-    }
-
-    const startTime = new Date(`${date}T${time}:00`)
-    if (Number.isNaN(startTime.getTime())) {
-      Alert.alert(
-        'Invalid date or time',
-        'Please use YYYY-MM-DD for date and HH:MM for time.'
-      )
       return
     }
 
@@ -133,7 +169,7 @@ export default function CreateActivityScreen() {
         description: description.trim() || null,
         activity_type: activityType,
         city: city.trim(),
-        start_time: startTime.toISOString(),
+        start_time: startDateTime.toISOString(),
         max_participants: parsedMaxParticipants,
         circuit_id: selectedCircuitId,
       })
@@ -163,6 +199,7 @@ export default function CreateActivityScreen() {
         contentContainerStyle={styles.contentContainer}
       >
         <Text style={styles.title}>Create activity</Text>
+
         <Text style={styles.subtitle}>
           Organize a new ride and let riders join your team.
         </Text>
@@ -191,6 +228,7 @@ export default function CreateActivityScreen() {
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Ride type</Text>
+
           <View style={styles.chipsRow}>
             {activityTypeOptions.map((option) => {
               const selected = activityType === option.value
@@ -202,7 +240,10 @@ export default function CreateActivityScreen() {
                   style={[styles.chip, selected && styles.chipSelected]}
                 >
                   <Text
-                    style={[styles.chipText, selected && styles.chipTextSelected]}
+                    style={[
+                      styles.chipText,
+                      selected && styles.chipTextSelected,
+                    ]}
                   >
                     {option.label}
                   </Text>
@@ -225,24 +266,45 @@ export default function CreateActivityScreen() {
         <View style={styles.row}>
           <View style={[styles.fieldGroup, styles.halfField]}>
             <Text style={styles.label}>Date</Text>
-            <TextInput
-              value={date}
-              onChangeText={setDate}
-              placeholder="2026-04-18"
-              style={styles.input}
-            />
+
+            <Pressable
+              onPress={() => setShowDatePicker(true)}
+              style={styles.pickerInput}
+            >
+              <Text style={styles.pickerText}>{formattedDate}</Text>
+            </Pressable>
           </View>
 
           <View style={[styles.fieldGroup, styles.halfField]}>
             <Text style={styles.label}>Time</Text>
-            <TextInput
-              value={time}
-              onChangeText={setTime}
-              placeholder="07:00"
-              style={styles.input}
-            />
+
+            <Pressable
+              onPress={() => setShowTimePicker(true)}
+              style={styles.pickerInput}
+            >
+              <Text style={styles.pickerText}>{formattedTime}</Text>
+            </Pressable>
           </View>
         </View>
+
+        {showDatePicker ? (
+          <DateTimePicker
+            value={startDateTime}
+            mode="date"
+            display="default"
+            minimumDate={new Date()}
+            onChange={handleDateChange}
+          />
+        ) : null}
+
+        {showTimePicker ? (
+          <DateTimePicker
+            value={startDateTime}
+            mode="time"
+            display="default"
+            onChange={handleTimeChange}
+          />
+        ) : null}
 
         <View style={[styles.fieldGroup, styles.halfField]}>
           <Text style={styles.label}>Max riders</Text>
@@ -271,7 +333,9 @@ export default function CreateActivityScreen() {
         ) : circuitsError ? (
           <Text style={styles.errorText}>{circuitsError}</Text>
         ) : circuits.length === 0 ? (
-          <Text style={styles.helperText}>No active circuits available yet.</Text>
+          <Text style={styles.helperText}>
+            No circuits available yet. Create a circuit first.
+          </Text>
         ) : (
           <View style={styles.circuitList}>
             {circuits.map((circuit) => {
@@ -290,10 +354,15 @@ export default function CreateActivityScreen() {
                   ]}
                 >
                   <Text style={styles.circuitName}>{circuit.name}</Text>
+
                   <Text style={styles.circuitMeta}>
-                    {circuit.city} · {circuit.difficulty} · {circuit.distance_km} km
+                    {circuit.city} · {circuit.difficulty} ·{' '}
+                    {circuit.distance_km} km
                   </Text>
-                  <Text style={styles.circuitMeta}>~ {circuit.duration_min} min</Text>
+
+                  <Text style={styles.circuitMeta}>
+                    ~ {circuit.duration_min} min
+                  </Text>
                 </Pressable>
               )
             })}
@@ -303,7 +372,9 @@ export default function CreateActivityScreen() {
         {selectedCircuit ? (
           <View style={styles.selectedCircuitBox}>
             <Text style={styles.selectedCircuitTitle}>Selected circuit</Text>
-            <Text style={styles.selectedCircuitText}>{selectedCircuit.name}</Text>
+            <Text style={styles.selectedCircuitText}>
+              {selectedCircuit.name}
+            </Text>
           </View>
         ) : null}
 
@@ -369,6 +440,20 @@ const styles = StyleSheet.create({
   },
   halfField: {
     flex: 1,
+  },
+  pickerInput: {
+    minHeight: 54,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  pickerText: {
+    fontSize: 16,
+    color: '#111827',
+    fontWeight: '600',
   },
   chipsRow: {
     flexDirection: 'row',
