@@ -125,7 +125,7 @@ export default function OnboardingScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Complete your profile</Text>
       <Text style={styles.subtitle}>
-        Tell us a bit about your riding style so TeamUp can personalize your experience.
+        Tell us a bit about your riding style so Parea can personalize your experience.
       </Text>
 
       <View style={styles.section}>

@@ -212,23 +212,35 @@ export default function HomeScreen() {
                 }
                 style={styles.circuitInfoPress}
               >
-                <Text style={styles.circuitNameText}>
-                  {activity.circuit?.name ?? activity.title}
-                  {activity.circuit ? `, ${activity.circuit.distance_km}km >` : ' >'}
-                </Text>
-              </Pressable>
+                <View style={styles.circuitTextBlock}>
+                  <View style={styles.titleRow}>
+                    <Text style={styles.circuitNameText} numberOfLines={1}>
+                      {activity.circuit?.name ?? activity.title}
+                      {activity.circuit ? `, ${activity.circuit.distance_km}km` : ''}
+                    </Text>
 
-              <Text style={styles.infoLineTop}>
-                {activity.activity_type} · {cardStatus} · {participantCount} /{' '}
-                {activity.max_participants} filled
-              </Text>
+                    <View style={styles.inlineArrowCircle}>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={6}
+                        color="#FFFFFF"
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={styles.infoLineTop} numberOfLines={1}>
+                    {activity.activity_type} · {cardStatus} · {participantCount} /{' '}
+                    {activity.max_participants} filled
+                  </Text>
+                </View>
+              </Pressable>
             </View>
 
             <Pressable
               onPress={() => handleOpenCircuitDetails(activity)}
               style={styles.floatingPlusButton}
             >
-              <Text style={styles.floatingPlusButtonText}>+</Text>
+              <MaterialCommunityIcons name="plus" size={26} color="#0B1220" />
             </Pressable>
 
             <View style={styles.floatingActions}>
@@ -333,9 +345,7 @@ export default function HomeScreen() {
   if (activities.length === 0) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.emptyText}>
-          {error ?? 'No rides available yet.'}
-        </Text>
+        <Text style={styles.emptyText}>{error ?? 'No rides available yet.'}</Text>
       </View>
     )
   }
@@ -424,12 +434,23 @@ const styles = StyleSheet.create({
   bottomInfoWrap: {
     position: 'absolute',
     left: 12,
-    right: 60,
+    right: 96,
     bottom: 90,
     alignItems: 'flex-start',
   },
   circuitInfoPress: {
     alignSelf: 'flex-start',
+    borderRadius: 18,
+  },
+  circuitTextBlock: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   circuitNameText: {
     color: '#FFFFFF',
@@ -437,34 +458,43 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'left',
     letterSpacing: -0.2,
+    flexShrink: 1,
+  },
+  inlineArrowCircle: {
+    marginLeft: 4,
+    marginTop: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
+    backgroundColor: 'rgba(11, 18, 32, 0.82)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   infoLineTop: {
     color: 'rgba(255,255,255,0.96)',
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'left',
-    marginTop: 6,
+    marginTop: 4,
   },
   floatingPlusButton: {
     position: 'absolute',
-    right: 12,
-    top: '50%',
-    marginTop: -16,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    right: 28,
+    bottom: 106,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
     zIndex: 25,
-  },
-  floatingPlusButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
-    lineHeight: 20,
   },
   floatingActions: {
     position: 'absolute',

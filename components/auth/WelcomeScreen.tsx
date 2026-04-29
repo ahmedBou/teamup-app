@@ -16,10 +16,10 @@ export default function WelcomeScreen({
       <View style={styles.container}>
         <View style={styles.hero}>
           <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>T</Text>
+            <Text style={styles.logoText}>P</Text>
           </View>
 
-          <Text style={styles.title}>TeamUp</Text>
+          <Text style={styles.title}>Parea</Text>
           <Text style={styles.tagline}>
             Create or join local group rides and watch the squad fill up piece by piece.
           </Text>

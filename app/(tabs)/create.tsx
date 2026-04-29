@@ -1,6 +1,5 @@
-import DateTimePicker from '@react-native-community/datetimepicker'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Pressable,
@@ -10,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { DatePickerModal, TimePickerModal } from '../../components/WheelPicker'
 import { useAuth } from '../../hooks/useAuth'
 import { activityService } from '../../src/services/activityService'
 import { circuitService } from '../../src/services/circuitService'
@@ -24,35 +24,76 @@ const activityTypeOptions: { value: ActivityType; label: string }[] = [
   { value: 'casual_ride', label: 'Casual ride' },
 ]
 
+function pad2(value: number) {
+  return String(value).padStart(2, '0')
+}
+
+function formatDateInput(date: Date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+    date.getDate()
+  )}`
+}
+
+function formatTimeInput(date: Date) {
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+}
+
+function buildLocalDate(dateStr: string, timeStr: string) {
+  const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const timeMatch = timeStr.match(/^(\d{2}):(\d{2})$/)
+
+  if (!dateMatch || !timeMatch) return null
+
+  const year = Number(dateMatch[1])
+  const month = Number(dateMatch[2]) - 1
+  const day = Number(dateMatch[3])
+  const hour = Number(timeMatch[1])
+  const minute = Number(timeMatch[2])
+
+  const date = new Date(year, month, day, hour, minute, 0, 0)
+
+  const isValid =
+    date.getFullYear() === year &&
+    date.getMonth() === month &&
+    date.getDate() === day &&
+    date.getHours() === hour &&
+    date.getMinutes() === minute
+
+  return isValid ? date : null
+}
+
+function createTomorrowDefault() {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  tomorrow.setHours(7, 0, 0, 0)
+  return tomorrow
+}
+
 export default function CreateActivityScreen() {
   const router = useRouter()
   const { session } = useAuth()
   const userId = session?.user?.id ?? null
 
+  const defaultDate = useMemo(() => createTomorrowDefault(), [])
+
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [city, setCity] = useState('Temara')
   const [activityType, setActivityType] = useState<ActivityType>('road_ride')
+  const [maxParticipants, setMaxParticipants] = useState('6')
+  const [selectedCircuitId, setSelectedCircuitId] = useState<string | null>(
+    null
+  )
 
-  const [startDateTime, setStartDateTime] = useState(() => {
-    const initialDate = new Date()
-    initialDate.setHours(initialDate.getHours() + 1)
-    initialDate.setMinutes(0)
-    initialDate.setSeconds(0)
-    initialDate.setMilliseconds(0)
-    return initialDate
-  })
+  const [dateStr, setDateStr] = useState(formatDateInput(defaultDate))
+  const [timeStr, setTimeStr] = useState(formatTimeInput(defaultDate))
 
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showTimePicker, setShowTimePicker] = useState(false)
 
-  const [maxParticipants, setMaxParticipants] = useState('6')
-  const [selectedCircuitId, setSelectedCircuitId] = useState<string | null>(null)
-
   const [circuits, setCircuits] = useState<Circuit[]>([])
   const [circuitsLoading, setCircuitsLoading] = useState(false)
   const [circuitsError, setCircuitsError] = useState<string | null>(null)
-
   const [submitting, setSubmitting] = useState(false)
 
   const selectedCircuit = useMemo(
@@ -91,45 +132,12 @@ export default function CreateActivityScreen() {
     }, [loadCircuits])
   )
 
-  const formattedDate = startDateTime.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-
-  const formattedTime = startDateTime.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-
-  const handleDateChange = (_event: any, selectedDate?: Date) => {
-    setShowDatePicker(false)
-
-    if (!selectedDate) return
-
-    setStartDateTime((currentDate) => {
-      const nextDate = new Date(currentDate)
-      nextDate.setFullYear(selectedDate.getFullYear())
-      nextDate.setMonth(selectedDate.getMonth())
-      nextDate.setDate(selectedDate.getDate())
-      return nextDate
-    })
+  const openDatePicker = () => {
+    setShowDatePicker(true)
   }
 
-  const handleTimeChange = (_event: any, selectedTime?: Date) => {
-    setShowTimePicker(false)
-
-    if (!selectedTime) return
-
-    setStartDateTime((currentDate) => {
-      const nextDate = new Date(currentDate)
-      nextDate.setHours(selectedTime.getHours())
-      nextDate.setMinutes(selectedTime.getMinutes())
-      nextDate.setSeconds(0)
-      nextDate.setMilliseconds(0)
-      return nextDate
-    })
+  const openTimePicker = () => {
+    setShowTimePicker(true)
   }
 
   const handleCreateActivity = async () => {
@@ -153,10 +161,22 @@ export default function CreateActivityScreen() {
       return
     }
 
+    const parsedDate = buildLocalDate(dateStr, timeStr)
+
+    if (!parsedDate) {
+      Alert.alert('Invalid date/time', 'Please choose a valid date and time.')
+      return
+    }
+
+    if (parsedDate.getTime() <= Date.now()) {
+      Alert.alert('Invalid date', 'The ride must be scheduled in the future.')
+      return
+    }
+
     const parsedMaxParticipants = Number(maxParticipants)
 
     if (!Number.isFinite(parsedMaxParticipants) || parsedMaxParticipants < 2) {
-      Alert.alert('Invalid riders', 'Max participants must be at least 2.')
+      Alert.alert('Invalid riders', 'Max riders must be at least 2.')
       return
     }
 
@@ -169,7 +189,7 @@ export default function CreateActivityScreen() {
         description: description.trim() || null,
         activity_type: activityType,
         city: city.trim(),
-        start_time: startDateTime.toISOString(),
+        start_time: parsedDate.toISOString(),
         max_participants: parsedMaxParticipants,
         circuit_id: selectedCircuitId,
       })
@@ -206,20 +226,24 @@ export default function CreateActivityScreen() {
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Ride title</Text>
+
           <TextInput
             value={title}
             onChangeText={setTitle}
             placeholder="Sunday morning ride"
+            placeholderTextColor="#64748b"
             style={styles.input}
           />
         </View>
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Description</Text>
+
           <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder="Short description of the ride"
+            placeholderTextColor="#64748b"
             multiline
             textAlignVertical="top"
             style={[styles.input, styles.textArea]}
@@ -255,139 +279,174 @@ export default function CreateActivityScreen() {
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>City</Text>
+
           <TextInput
             value={city}
             onChangeText={setCity}
             placeholder="Temara"
+            placeholderTextColor="#64748b"
             style={styles.input}
           />
         </View>
 
-        <View style={styles.row}>
-          <View style={[styles.fieldGroup, styles.halfField]}>
-            <Text style={styles.label}>Date</Text>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.sectionTitle}>Ride schedule</Text>
 
-            <Pressable
-              onPress={() => setShowDatePicker(true)}
-              style={styles.pickerInput}
-            >
-              <Text style={styles.pickerText}>{formattedDate}</Text>
-            </Pressable>
-          </View>
+          <View style={styles.scheduleBox}>
+            <View style={styles.dateTimeRow}>
+              <View style={styles.dateTimeColumn}>
+                <Text style={styles.label}>Date</Text>
 
-          <View style={[styles.fieldGroup, styles.halfField]}>
-            <Text style={styles.label}>Time</Text>
+                <Pressable
+                  onPress={openDatePicker}
+                  style={styles.inputPressable}
+                >
+                  <Text style={styles.inputPressableText}>{dateStr}</Text>
+                </Pressable>
+              </View>
 
-            <Pressable
-              onPress={() => setShowTimePicker(true)}
-              style={styles.pickerInput}
-            >
-              <Text style={styles.pickerText}>{formattedTime}</Text>
-            </Pressable>
+              <View style={styles.dateTimeColumn}>
+                <Text style={styles.label}>Time</Text>
+
+                <Pressable
+                  onPress={openTimePicker}
+                  style={styles.inputPressable}
+                >
+                  <Text style={styles.inputPressableText}>{timeStr}</Text>
+                </Pressable>
+              </View>
+            </View>
           </View>
         </View>
 
-        {showDatePicker ? (
-          <DateTimePicker
-            value={startDateTime}
-            mode="date"
-            display="default"
-            minimumDate={new Date()}
-            onChange={handleDateChange}
-          />
-        ) : null}
-
-        {showTimePicker ? (
-          <DateTimePicker
-            value={startDateTime}
-            mode="time"
-            display="default"
-            onChange={handleTimeChange}
-          />
-        ) : null}
-
-        <View style={[styles.fieldGroup, styles.halfField]}>
+        <View style={styles.fieldGroup}>
           <Text style={styles.label}>Max riders</Text>
+
           <TextInput
             value={maxParticipants}
             onChangeText={setMaxParticipants}
+            keyboardType="number-pad"
             placeholder="6"
-            keyboardType="numeric"
+            placeholderTextColor="#64748b"
             style={styles.input}
           />
         </View>
 
-        <View style={styles.circuitHeaderRow}>
-          <Text style={styles.label}>Choose a circuit</Text>
+        <View style={styles.circuitHeader}>
+          <Text style={styles.sectionTitle}>Choose a circuit</Text>
 
           <Pressable
             onPress={() => router.push('/create-circuit')}
-            style={styles.addCircuitButton}
+            style={styles.createCircuitButton}
           >
-            <Text style={styles.addCircuitButtonText}>Create new circuit</Text>
+            <Text style={styles.createCircuitButtonText}>
+              Create new circuit
+            </Text>
           </Pressable>
         </View>
 
         {circuitsLoading ? (
-          <Text style={styles.helperText}>Loading circuits...</Text>
-        ) : circuitsError ? (
-          <Text style={styles.errorText}>{circuitsError}</Text>
-        ) : circuits.length === 0 ? (
-          <Text style={styles.helperText}>
-            No circuits available yet. Create a circuit first.
-          </Text>
-        ) : (
-          <View style={styles.circuitList}>
-            {circuits.map((circuit) => {
-              const selected = selectedCircuitId === circuit.id
-
-              return (
-                <Pressable
-                  key={circuit.id}
-                  onPress={() => {
-                    setSelectedCircuitId(circuit.id)
-                    setCity(circuit.city ?? city)
-                  }}
-                  style={[
-                    styles.circuitCard,
-                    selected && styles.circuitCardSelected,
-                  ]}
-                >
-                  <Text style={styles.circuitName}>{circuit.name}</Text>
-
-                  <Text style={styles.circuitMeta}>
-                    {circuit.city} · {circuit.difficulty} ·{' '}
-                    {circuit.distance_km} km
-                  </Text>
-
-                  <Text style={styles.circuitMeta}>
-                    ~ {circuit.duration_min} min
-                  </Text>
-                </Pressable>
-              )
-            })}
+          <View style={styles.messageBox}>
+            <Text style={styles.messageText}>Loading circuits...</Text>
           </View>
-        )}
+        ) : null}
 
-        {selectedCircuit ? (
-          <View style={styles.selectedCircuitBox}>
-            <Text style={styles.selectedCircuitTitle}>Selected circuit</Text>
-            <Text style={styles.selectedCircuitText}>
-              {selectedCircuit.name}
+        {circuitsError ? (
+          <View style={styles.messageBox}>
+            <Text style={styles.errorText}>{circuitsError}</Text>
+
+            <Pressable
+              onPress={() => void loadCircuits()}
+              style={styles.retryButton}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {!circuitsLoading && !circuitsError && circuits.length === 0 ? (
+          <View style={styles.messageBox}>
+            <Text style={styles.messageText}>
+              No circuits available yet. Create a new circuit first.
             </Text>
           </View>
+        ) : null}
+
+        <View style={styles.circuitList}>
+          {circuits.map((circuit) => {
+            const selected = circuit.id === selectedCircuitId
+
+            return (
+              <Pressable
+                key={circuit.id}
+                onPress={() => setSelectedCircuitId(circuit.id)}
+                style={[
+                  styles.circuitCard,
+                  selected && styles.circuitCardSelected,
+                ]}
+              >
+                <View style={styles.circuitCardTopRow}>
+                  <Text style={styles.circuitName}>{circuit.name}</Text>
+
+                  {selected ? (
+                    <View style={styles.selectedBadge}>
+                      <Text style={styles.selectedBadgeText}>Selected</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <Text style={styles.circuitMeta}>
+                  {circuit.city} · {circuit.difficulty} ·{' '}
+                  {circuit.distance_km} km
+                </Text>
+
+                <Text style={styles.circuitMeta}>
+                  ~ {circuit.duration_min} min
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
+
+        {selectedCircuit ? (
+          <Text style={styles.selectedCircuitHint}>
+            Selected circuit: {selectedCircuit.name}
+          </Text>
         ) : null}
 
         <Pressable
           onPress={() => void handleCreateActivity()}
           disabled={submitting}
-          style={[styles.primaryButton, submitting && styles.buttonDisabled]}
+          style={[
+            styles.submitButton,
+            submitting && styles.submitButtonDisabled,
+          ]}
         >
-          <Text style={styles.primaryButtonText}>
-            {submitting ? 'Creating activity...' : 'Create activity'}
+          <Text style={styles.submitButtonText}>
+            {submitting ? 'Creating...' : 'Create activity'}
           </Text>
         </Pressable>
       </ScrollView>
+
+      <DatePickerModal
+        visible={showDatePicker}
+        value={dateStr}
+        onConfirm={(val: string) => {
+          setDateStr(val)
+          setShowDatePicker(false)
+        }}
+        onClose={() => setShowDatePicker(false)}
+      />
+
+      <TimePickerModal
+        visible={showTimePicker}
+        value={timeStr}
+        onConfirm={(val: string) => {
+          setTimeStr(val)
+          setShowTimePicker(false)
+        }}
+        onClose={() => setShowTimePicker(false)}
+      />
     </View>
   )
 }
@@ -395,172 +454,260 @@ export default function CreateActivityScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
+
   contentContainer: {
-    padding: 20,
-    paddingBottom: 220,
-    gap: 18,
+    paddingHorizontal: 20,
+    paddingTop: 28,
+    paddingBottom: 120,
   },
+
   title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#111827',
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.7,
+    marginBottom: 10,
   },
+
   subtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    lineHeight: 24,
-  },
-  fieldGroup: {
-    gap: 8,
-  },
-  label: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
+    color: '#64748b',
+    fontWeight: '500',
+    marginBottom: 22,
   },
+
+  fieldGroup: {
+    marginBottom: 20,
+  },
+
+  label: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+
   input: {
-    minHeight: 54,
+    minHeight: 56,
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 16,
     paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 16,
     color: '#111827',
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
+
   textArea: {
-    minHeight: 120,
+    minHeight: 110,
     paddingTop: 14,
   },
-  row: {
+
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    backgroundColor: '#ffffff',
+  },
+
+  chipSelected: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
+  },
+
+  chipText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+
+  chipTextSelected: {
+    color: '#ffffff',
+  },
+
+  sectionTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+
+  scheduleBox: {
+    marginTop: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+  },
+
+  dateTimeRow: {
     flexDirection: 'row',
     gap: 12,
   },
-  halfField: {
+
+  dateTimeColumn: {
     flex: 1,
   },
-  pickerInput: {
-    minHeight: 54,
+
+  inputPressable: {
+    height: 56,
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 16,
     paddingHorizontal: 14,
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
-  pickerText: {
+
+  inputPressableText: {
     fontSize: 16,
     color: '#111827',
-    fontWeight: '600',
+    fontWeight: '500',
   },
-  chipsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    flexWrap: 'wrap',
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    backgroundColor: '#fff',
-  },
-  chipSelected: {
-    backgroundColor: '#0B1220',
-    borderColor: '#0B1220',
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  chipTextSelected: {
-    color: '#fff',
-  },
-  circuitHeaderRow: {
+
+  circuitHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 12,
+    marginBottom: 14,
   },
-  addCircuitButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+
+  createCircuitButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 999,
     backgroundColor: '#dbeafe',
   },
-  addCircuitButtonText: {
+
+  createCircuitButtonText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1d4ed8',
+    fontWeight: '900',
+    color: '#2563eb',
   },
-  helperText: {
-    fontSize: 14,
-    color: '#64748b',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#ef4444',
-  },
-  circuitList: {
-    gap: 12,
-  },
-  circuitCard: {
+
+  messageBox: {
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderRadius: 18,
     padding: 16,
-    backgroundColor: '#fafafa',
-    gap: 4,
+    marginBottom: 14,
   },
-  circuitCardSelected: {
-    borderColor: '#22c55e',
-    backgroundColor: '#f0fdf4',
-  },
-  circuitName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  circuitMeta: {
+
+  messageText: {
     fontSize: 14,
     color: '#64748b',
     fontWeight: '600',
   },
-  selectedCircuitBox: {
-    borderWidth: 1,
-    borderColor: '#86efac',
-    backgroundColor: '#f0fdf4',
-    borderRadius: 16,
-    padding: 14,
-    gap: 4,
-  },
-  selectedCircuitTitle: {
-    fontSize: 13,
+
+  errorText: {
+    fontSize: 14,
+    color: '#dc2626',
     fontWeight: '700',
-    color: '#166534',
+    marginBottom: 10,
   },
-  selectedCircuitText: {
-    fontSize: 15,
+
+  retryButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#0f172a',
+  },
+
+  retryButtonText: {
+    color: '#ffffff',
     fontWeight: '800',
-    color: '#111827',
+    fontSize: 13,
   },
-  primaryButton: {
-    backgroundColor: '#22c55e',
-    paddingVertical: 16,
-    borderRadius: 16,
+
+  circuitList: {
+    gap: 12,
+  },
+
+  circuitCard: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: '#ffffff',
+  },
+
+  circuitCardSelected: {
+    borderColor: '#22c55e',
+    backgroundColor: '#f0fdf4',
+  },
+
+  circuitCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
     alignItems: 'center',
-    marginTop: 8,
+    marginBottom: 6,
   },
-  primaryButtonText: {
-    fontSize: 16,
+
+  circuitName: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+
+  selectedBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#22c55e',
+  },
+
+  selectedBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+
+  circuitMeta: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+
+  selectedCircuitHint: {
+    marginTop: 14,
+    fontSize: 13,
+    color: '#16a34a',
     fontWeight: '800',
-    color: '#08101c',
   },
-  buttonDisabled: {
-    opacity: 0.7,
+
+  submitButton: {
+    marginTop: 24,
+    minHeight: 58,
+    borderRadius: 16,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+
+  submitButtonText: {
+    color: '#07111f',
+    fontSize: 15,
+    fontWeight: '900',
   },
 })

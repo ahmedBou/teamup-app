@@ -1,9 +1,11 @@
 import { useFocusEffect } from '@react-navigation/native'
+import { useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -38,15 +40,12 @@ const cyclingLevelOptions: CyclingLevel[] = [
   'advanced',
 ]
 
-const ridingStyleOptions: RidingStyle[] = [
-  'road',
-  'mtb',
-  'gravel',
-  'casual',
-]
+const ridingStyleOptions: RidingStyle[] = ['road', 'mtb', 'gravel', 'casual']
 
 export default function ProfileScreen() {
+  const router = useRouter()
   const { session } = useAuth()
+
   const userId = session?.user?.id ?? null
   const email = session?.user?.email ?? null
 
@@ -54,6 +53,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   const [firstName, setFirstName] = useState('')
   const [city, setCity] = useState('')
@@ -89,8 +89,8 @@ export default function ProfileScreen() {
       if (error) throw error
 
       const nextProfile = (data ?? null) as ProfileRow | null
-      setProfile(nextProfile)
 
+      setProfile(nextProfile)
       setFirstName(nextProfile?.first_name ?? '')
       setCity(nextProfile?.city ?? '')
       setBio(nextProfile?.bio ?? '')
@@ -106,6 +106,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     void loadProfile()
   }, [loadProfile])
+
   useFocusEffect(
     useCallback(() => {
       void loadProfile()
@@ -194,6 +195,54 @@ export default function ProfileScreen() {
     }
   }
 
+  const performLogout = async () => {
+    try {
+      setLoggingOut(true)
+
+      const { error } = await supabase.auth.signOut()
+
+      if (error) throw error
+
+      setProfile(null)
+      setFirstName('')
+      setCity('')
+      setBio('')
+      setCyclingLevel(null)
+      setRidingStyle(null)
+
+      router.replace('/')
+    } catch (err: any) {
+      Alert.alert('Logout failed', err?.message ?? 'Unable to log out.')
+    } finally {
+      setLoggingOut(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to log out?')
+
+      if (!confirmed) return
+
+      await performLogout()
+      return
+    }
+
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
+      {
+        text: 'Cancel',
+        style: 'cancel',
+      },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: () => {
+          void performLogout()
+        },
+      },
+    ])
+  }
+
   const initials = useMemo(() => {
     const value = firstName.trim() || profile?.first_name?.trim() || 'R'
     return value.slice(0, 1).toUpperCase()
@@ -218,7 +267,10 @@ export default function ProfileScreen() {
       <View style={styles.card}>
         <View style={styles.avatarSection}>
           {profile?.avatar_url ? (
-            <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+            <Image
+              source={{ uri: profile.avatar_url }}
+              style={styles.avatarImage}
+            />
           ) : (
             <View style={styles.avatarFallback}>
               <Text style={styles.avatarFallbackText}>{initials}</Text>
@@ -280,6 +332,7 @@ export default function ProfileScreen() {
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Cycling level</Text>
+
           <View style={styles.chipsRow}>
             {cyclingLevelOptions.map((option) => {
               const selected = cyclingLevel === option
@@ -303,6 +356,7 @@ export default function ProfileScreen() {
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Riding style</Text>
+
           <View style={styles.chipsRow}>
             {ridingStyleOptions.map((option) => {
               const selected = ridingStyle === option
@@ -333,6 +387,16 @@ export default function ProfileScreen() {
             {saving ? 'Saving...' : 'Save profile'}
           </Text>
         </Pressable>
+
+        <Pressable
+          onPress={() => void handleLogout()}
+          disabled={loggingOut}
+          style={[styles.logoutButton, loggingOut && styles.buttonDisabled]}
+        >
+          <Text style={styles.logoutButtonText}>
+            {loggingOut ? 'Logging out...' : 'Log out'}
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   )
@@ -347,7 +411,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-    paddingBottom: 180,
+    paddingBottom: 220,
     gap: 18,
     backgroundColor: '#fff',
   },
@@ -479,6 +543,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: '#08101c',
+  },
+  logoutButton: {
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  logoutButtonText: {
+    color: '#ef4444',
+    fontSize: 16,
+    fontWeight: '800',
   },
   buttonDisabled: {
     opacity: 0.7,

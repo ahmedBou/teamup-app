@@ -2,7 +2,7 @@
   "expo": {
     "name": "Parea",
     "slug": "teamup-mobile",
-    "version": "1.0.6",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "parea",
@@ -25,7 +25,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.parea.app",
-      "versionCode": 8
+      "versionCode": 13
     },
     "web": {
       "output": "static",
